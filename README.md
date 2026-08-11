@@ -48,13 +48,14 @@ Independent tasks run in parallel worktrees.
    export FIREWORKS_API_KEY=fw_...
    ```
 
-   If you use fireconnect to manage Fireworks credentials, its managed
-   config works too; check-env.sh accepts either source.
+   Any tool that populates either the `FIREWORKS_API_KEY` environment
+   variable or OpenCode's auth store
+   (`~/.local/share/opencode/auth.json`) also works.
 
 3. Clone this repo anywhere and symlink it into your Claude Code skills:
 
    ```sh
-   git clone git@github.com:brianleach/fireworks-delegate.git
+   git clone https://github.com/brianleach/fireworks-delegate.git
    cd fireworks-delegate
    ./install.sh
    ```
