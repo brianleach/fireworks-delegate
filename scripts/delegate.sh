@@ -1,22 +1,6 @@
 #!/usr/bin/env bash
 # Delegate a task spec to an OSS model on Fireworks via OpenCode, in an
-# isolated git worktree of the current repo.
-#
-# Usage:
-#   delegate.sh <task-spec.md> [--model <provider/model>] [--name <worktree-name>] [--pr]
-#
-# Behavior:
-#   - creates a worktree under .fw-worktrees/<name> on branch fw/<name>,
-#     branched off the current branch
-#   - runs `opencode run` in that worktree with the task spec as the prompt
-#   - captures all output to .fw-worktrees/<name>.log (next to the worktree)
-#   - auto-commits any changes the model left uncommitted
-#   - with --pr: pushes fw/<name> to origin and opens a draft PR against the
-#     base branch (needs an origin remote and the gh CLI; warns and
-#     continues without failing when either is missing)
-#   - prints the worktree path and a diff --stat against the base branch
-#
-# Safe to run multiple times in parallel with distinct names.
+# isolated git worktree of the current repo. Run with --help for usage.
 set -euo pipefail
 
 DEFAULT_MODEL="fireworks-ai/accounts/fireworks/routers/kimi-k3-us"
@@ -32,7 +16,8 @@ isolated git worktree of the current repo.
 Behavior:
   - creates a worktree under .fw-worktrees/<name> on branch fw/<name>,
     branched off the current branch
-  - runs `opencode run` in that worktree with the task spec as the prompt
+  - copies the spec into the worktree as .fw-task.md and runs
+    `opencode run` there with a short prompt pointing at that file
   - captures all output to .fw-worktrees/<name>.log (next to the worktree)
   - auto-commits any changes the model left uncommitted
   - with --pr: pushes fw/<name> to origin and opens a draft PR against the
@@ -56,6 +41,45 @@ with_timeout() {
     perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
   fi
 }
+
+# Redaction filter for the log tail that goes into a PR body: the on-disk
+# log stays complete, but a public PR must not leak local details. Replaces
+# every literal occurrence of $HOME with "~" and swaps any line matching a
+# secret-shaped pattern for the single line "[redacted]". Key prefixes
+# (fw_, fpk_, sk-) match case-sensitively; keyword patterns (api key,
+# authorization:, bearer, token=, _KEY=, _SECRET=, _TOKEN=) match
+# case-insensitively. Reads stdin, writes stdout.
+redact_log() {
+  awk '
+    BEGIN { home = ENVIRON["HOME"] }
+    {
+      if (home != "") {
+        rebuilt = ""
+        rest = $0
+        while ((i = index(rest, home)) > 0) {
+          rebuilt = rebuilt substr(rest, 1, i - 1) "~"
+          rest = substr(rest, i + length(home))
+        }
+        $0 = rebuilt rest
+      }
+      lower = tolower($0)
+      if ($0 ~ /fw_[A-Za-z0-9]/ || $0 ~ /fpk_[A-Za-z0-9]/ ||
+          $0 ~ /sk-[A-Za-z0-9]/ ||
+          lower ~ /api[_-]?key/ || lower ~ /authorization:/ ||
+          lower ~ /bearer / || lower ~ /token=/ ||
+          lower ~ /_key=/ || lower ~ /_secret=/ || lower ~ /_token=/) {
+        print "[redacted]"
+      } else {
+        print
+      }
+    }'
+}
+
+# Hidden test hook: pipe text through the redaction filter and exit.
+if [ "${1:-}" = "--redact-filter" ]; then
+  redact_log
+  exit 0
+fi
 
 spec_file=""
 model="$DEFAULT_MODEL"
@@ -155,8 +179,12 @@ git worktree add -b "$branch" "$wt_dir" "$base_branch" >/dev/null
 
 printf '%s\n' "$base_branch" >"$repo_root/.fw-worktrees/$name.base"
 
+# Deliver the spec as a file inside the worktree instead of as a single
+# argv string: large specs can exceed ARG_MAX.
+cp "$spec_file" "$wt_dir/.fw-task.md"
+
 log_file="$repo_root/.fw-worktrees/$name.log"
-prompt="$(cat "$spec_file")"
+prompt="Read the file .fw-task.md in the current directory and complete the task it describes. Do not modify or delete .fw-task.md."
 
 echo "==> running opencode (model: $model, timeout: ${RUN_TIMEOUT_SECS}s)"
 echo "==> log: $log_file"
@@ -171,6 +199,10 @@ if [ "$run_status" -ne 0 ]; then
   echo "WARNING: opencode exited with status $run_status (timeout or error)." >&2
   echo "         Inspect the log before trusting the result: $log_file" >&2
 fi
+
+# The spec copy must never land on the branch: remove it before the
+# auto-commit, even if the model rewrote it.
+rm -f "$wt_dir/.fw-task.md"
 
 # Commit anything the model left uncommitted so the branch fully captures
 # its work and collect.sh can merge it.
@@ -192,7 +224,7 @@ if [ "$pr_requested" -eq 1 ]; then
       printf '## Task spec\n\n'
       cat "$spec_file"
       printf '\n## Delegate log (tail)\n\n```\n'
-      tail -n 100 "$log_file"
+      tail -n 100 "$log_file" | redact_log
       printf '```\n'
     } >"$pr_body"
     if (cd "$wt_dir" && git push -u origin "$branch"); then
@@ -215,10 +247,12 @@ fi
 echo
 echo "==> worktree: $wt_dir"
 echo "==> diff --stat vs $base_branch:"
-if ! git -C "$wt_dir" diff --stat "$base_branch...$branch"; then
+diff_stat=""
+if ! diff_stat="$(git -C "$wt_dir" diff --stat "$base_branch...$branch")"; then
   echo "(no diff available)"
-fi
-if [ -z "$(git -C "$wt_dir" diff --stat "$base_branch...$branch")" ]; then
+elif [ -n "$diff_stat" ]; then
+  printf '%s\n' "$diff_stat"
+else
   echo "(no changes were made)"
 fi
 echo

@@ -112,6 +112,52 @@ exit 1'
   [[ "$output" != *"#!/usr/bin/env"* ]]
 }
 
+@test "spec reaches the worktree as .fw-task.md and is never committed" {
+  stub_opencode '#!/usr/bin/env bash
+cp .fw-task.md task-copy.txt
+exit 0'
+  run "$DELEGATE" "$SPEC" --name taskfile
+  [ "$status" -eq 0 ]
+  # The stub saw .fw-task.md in its cwd and copied the spec contents.
+  [ "$(git show fw/taskfile:task-copy.txt)" = "do an offline task" ]
+  # .fw-task.md itself is neither on the branch nor left in the worktree.
+  ! git cat-file -e "fw/taskfile:.fw-task.md"
+  [ ! -e .fw-worktrees/taskfile/.fw-task.md ]
+}
+
+@test "--redact-filter: HOME becomes ~ and a FIREWORKS_API_KEY line is redacted" {
+  local input="run log at $HOME/.fw-worktrees/demo.log
+FIREWORKS_API_KEY=fw_abc123
+all done"
+  run "$DELEGATE" --redact-filter <<<"$input"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"run log at ~/.fw-worktrees/demo.log"* ]]
+  [[ "$output" == *"[redacted]"* ]]
+  [[ "$output" == *"all done"* ]]
+  [[ "$output" != *"fw_abc123"* ]]
+  [[ "$output" != *"$HOME"* ]]
+}
+
+@test "--redact-filter: every secret-shaped pattern is redacted" {
+  local line
+  for line in \
+    "fw_abc123" \
+    "fpk_abc123" \
+    "sk-abc123" \
+    "api_key=hunter2" \
+    "API-KEY: hunter2" \
+    "Authorization: abc" \
+    "bearer abc" \
+    "token=abc" \
+    "MY_KEY=abc" \
+    "MY_SECRET=abc" \
+    "MY_TOKEN=abc"; do
+    run "$DELEGATE" --redact-filter <<<"$line"
+    [ "$status" -eq 0 ]
+    [ "$output" = "[redacted]" ]
+  done
+}
+
 @test "--pr without an origin remote: warns and still succeeds" {
   run "$DELEGATE" "$SPEC" --name pr-noorigin --pr
   [ "$status" -eq 0 ]
@@ -128,7 +174,7 @@ exit 1'
   local safe_bin="${BATS_TEST_TMPDIR}/safe-bin"
   mkdir -p "$safe_bin"
   local tool tool_path
-  for tool in bash env git tr sed cat dirname basename mkdir perl grep tail mktemp rm; do
+  for tool in bash env git tr sed cat dirname basename mkdir perl grep tail mktemp rm cp awk; do
     tool_path="$(command -v "$tool")"
     ln -sf "$tool_path" "$safe_bin/$tool"
   done
