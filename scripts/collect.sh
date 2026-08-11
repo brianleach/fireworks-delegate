@@ -1,22 +1,6 @@
 #!/usr/bin/env bash
 # Review and merge (or reject) a worktree produced by delegate.sh.
-#
-# Usage:
-#   collect.sh <name> [--base <branch>] [--merge | --reject]
-#
-# Modes:
-#   (default)   show the full diff; if run interactively, prompt to merge;
-#               otherwise print next steps
-#   --merge     merge fw/<name> into the base branch and remove the worktree;
-#               with an origin remote, also push the base branch and delete
-#               the remote fw/<name> branch so an open PR flips to merged
-#   --reject    discard the worktree, its branch, and its base record; with
-#               an origin remote and gh, also close any open PR and delete
-#               the remote fw/<name> branch (failures ignored)
-#
-# The base branch comes from .fw-worktrees/<name>.base, written by
-# delegate.sh; --base overrides that record. The run log lives at
-# .fw-worktrees/<name>.log and is never deleted here.
+# Run with --help for usage.
 set -euo pipefail
 
 usage() {
@@ -31,6 +15,7 @@ Modes:
   --merge     merge fw/<name> into the base branch and remove the worktree;
               with an origin remote, also push the base branch and delete
               the remote fw/<name> branch so an open PR flips to merged
+              (a rejected base push, e.g. branch protection, only warns)
   --reject    discard the worktree, its branch, and its base record; with
               an origin remote and gh, also close any open PR and delete
               the remote fw/<name> branch (failures ignored)
@@ -180,11 +165,17 @@ echo "==> merging $branch into $base_branch"
 git merge --no-ff -m "Merge delegated task $name (branch $branch)" "$branch"
 # Keep the remote in sync so an open PR for this branch flips to merged on
 # GitHub: push the base branch, then drop the remote fw branch (it may
-# never have been pushed, so ignore failure there).
+# never have been pushed, so ignore failure there). Branch protection can
+# reject the base push: warn instead of dying mid-merge, keep the remote
+# fw branch (an open PR still needs it), and finish the local cleanup.
 if git remote get-url origin >/dev/null 2>&1; then
   echo "==> pushing $base_branch to origin"
-  git push origin "$base_branch"
-  git push origin --delete "$branch" >/dev/null 2>&1 || true
+  if git push origin "$base_branch"; then
+    git push origin --delete "$branch" >/dev/null 2>&1 || true
+  else
+    echo "WARNING: merged locally but pushing $base_branch to origin was rejected (branch protection?)." >&2
+    echo "         Push it yourself or merge the PR on GitHub, then delete branch $branch on origin." >&2
+  fi
 fi
 git worktree remove --force "$wt_dir"
 git branch -D "$branch" >/dev/null 2>&1 || true

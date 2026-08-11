@@ -160,6 +160,30 @@ setup() {
   [ -f .fw-worktrees/task1.log ]
 }
 
+@test "--merge with a rejected base push warns, keeps the remote fw branch, and still cleans up" {
+  local origin
+  origin="$(setup_origin_remote)"
+  # Simulate delegate.sh --pr having pushed the fw branch.
+  git push -q origin fw/task1
+  # Branch protection: the bare repo now rejects every push.
+  printf '#!/usr/bin/env bash\nexit 1\n' >"$origin/hooks/pre-receive"
+  chmod +x "$origin/hooks/pre-receive"
+  run "$COLLECT" task1 --merge </dev/null
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING: merged locally but pushing main to origin was rejected (branch protection?)."* ]]
+  [[ "$output" == *"then delete branch fw/task1 on origin."* ]]
+  # The merge landed locally but not on origin.
+  [ -f KIMI_WAS_HERE.txt ]
+  [ "$(git --git-dir="$origin" rev-parse main)" != "$(git rev-parse main)" ]
+  # The remote fw branch still exists: an open PR still needs it.
+  git --git-dir="$origin" show-ref --verify --quiet refs/heads/fw/task1
+  # Local cleanup completed anyway.
+  [ ! -d .fw-worktrees/task1 ]
+  ! git show-ref --verify --quiet refs/heads/fw/task1
+  [ ! -f .fw-worktrees/task1.base ]
+  [ -f .fw-worktrees/task1.log ]
+}
+
 @test "--reject without an origin remote behaves exactly as before" {
   run "$COLLECT" task1 --reject </dev/null
   [ "$status" -eq 0 ]
