@@ -69,8 +69,14 @@ scripts/delegate.sh .fw-tasks/01-add-login-form.md
 
 Optional flags: `--model <provider/model>` to override the default,
 `--name <name>` to control the worktree name (defaults to the spec
-filename). Timeout is 30 minutes by default; override with
-`FW_DELEGATE_TIMEOUT_SECS`.
+filename), `--pr` to push the branch and open a draft GitHub PR whose
+body carries the task spec and the tail of the run log. Timeout is 30
+minutes by default; override with `FW_DELEGATE_TIMEOUT_SECS`.
+
+Use `--pr` whenever the target repo has a GitHub origin remote and the
+gh CLI is available: it gives the user a first-class review surface and
+preserves the task spec and log in the PR body. Fall back to the local
+flow otherwise.
 
 Run independent tasks in parallel by launching multiple `delegate.sh`
 invocations at once (separate worktrees make this safe). Run dependent
@@ -81,14 +87,32 @@ branches from the merged result.
 
 Never merge blind. For each finished worktree:
 
-1. Read `.fw-worktrees/<name>/delegate.log` for errors, test results, and
+1. Read `.fw-worktrees/<name>.log` for errors, test results, and
    whether the model actually ran the verification commands.
 2. Run `scripts/collect.sh <name>` to see the full diff.
 3. Judge: is it correct, does it match the spec, do tests pass?
 
+When the task was delegated with `--pr`, also post your review to the
+PR so the human sees it where they review: inline comments for concrete
+findings (the code-review tooling's comment mode if available, or
+`gh api` review comments), plus one summary comment via `gh pr comment`
+stating what you checked, the test results from the log, and an explicit
+"recommend merge" or "recommend revision" line. Formal Approve or
+Request-changes verdicts are impossible when the PR author and reviewer
+are the same account, so the summary comment is the verdict.
+
+**Human approval rule**: you may merge autonomously only when the diff
+is small and low-risk: at most 50 changed lines across at most 3 files,
+no security-sensitive paths (auth, crypto, payment, secrets handling),
+and the log shows the verification commands ran clean. Anything larger
+or riskier: post your review, give the user the PR URL (or the diff
+summary in local-only mode) with your recommendation, and wait for
+their decision before merging.
+
 Then take exactly one of these actions:
 
-- **Accept**: `scripts/collect.sh <name> --merge`
+- **Accept**: `scripts/collect.sh <name> --merge` (subject to the human
+  approval rule above)
 - **One revision round**: reject the worktree
   (`scripts/collect.sh <name> --reject`), append a `## Revision feedback`
   section to the task spec with concrete, specific corrections, and
