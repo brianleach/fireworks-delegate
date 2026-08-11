@@ -33,15 +33,16 @@ setup() {
   git show-ref --verify --quiet refs/heads/fw/task1
 }
 
-@test "--reject removes worktree, branch, and base file" {
+@test "--reject removes worktree, branch, and base file but keeps the log" {
   run "$COLLECT" task1 --reject </dev/null
   [ "$status" -eq 0 ]
   [ ! -d .fw-worktrees/task1 ]
   ! git show-ref --verify --quiet refs/heads/fw/task1
   [ ! -f .fw-worktrees/task1.base ]
+  [ -f .fw-worktrees/task1.log ]
 }
 
-@test "--merge lands the delegated change on main and cleans up" {
+@test "--merge lands the delegated change on main and cleans up, keeping the log" {
   run "$COLLECT" task1 --merge </dev/null
   [ "$status" -eq 0 ]
   [ -f KIMI_WAS_HERE.txt ]
@@ -49,6 +50,7 @@ setup() {
   [ ! -d .fw-worktrees/task1 ]
   ! git show-ref --verify --quiet refs/heads/fw/task1
   [ ! -f .fw-worktrees/task1.base ]
+  [ -f .fw-worktrees/task1.log ]
 }
 
 @test "--merge from a different branch than the base fails and merges nothing" {
@@ -61,4 +63,84 @@ setup() {
   [ "$(git rev-parse main)" = "$before" ]
   [ -d .fw-worktrees/task1 ]
   git show-ref --verify --quiet refs/heads/fw/task1
+}
+
+@test "missing .base file is a hard error mentioning --base" {
+  rm .fw-worktrees/task1.base
+  run "$COLLECT" task1 </dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no base branch recorded"* ]]
+  [[ "$output" == *"--base"* ]]
+  [ -d .fw-worktrees/task1 ]
+  git show-ref --verify --quiet refs/heads/fw/task1
+}
+
+@test "--base allows --merge when the .base file is missing" {
+  rm .fw-worktrees/task1.base
+  run "$COLLECT" task1 --merge --base main </dev/null
+  [ "$status" -eq 0 ]
+  [ -f KIMI_WAS_HERE.txt ]
+  [ ! -d .fw-worktrees/task1 ]
+  ! git show-ref --verify --quiet refs/heads/fw/task1
+}
+
+@test "--base overrides a present .base file" {
+  git branch altbase
+  printf 'altbase\n' >.fw-worktrees/task1.base
+  run "$COLLECT" task1 --merge --base main </dev/null
+  [ "$status" -eq 0 ]
+  [ -f KIMI_WAS_HERE.txt ]
+  ! git show-ref --verify --quiet refs/heads/fw/task1
+}
+
+@test "recorded base branch that no longer exists is a hard error" {
+  git branch gonebase
+  printf 'gonebase\n' >.fw-worktrees/task1.base
+  git branch -D gonebase >/dev/null
+  run "$COLLECT" task1 </dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no longer exists"* ]]
+  [[ "$output" == *"--base"* ]]
+  [ -d .fw-worktrees/task1 ]
+  git show-ref --verify --quiet refs/heads/fw/task1
+}
+
+@test "resolves a name that needed sanitizing" {
+  "$DELEGATE" "$SPEC" --name "hello world!" >/dev/null
+  run "$COLLECT" "hello world!" --reject </dev/null
+  [ "$status" -eq 0 ]
+  [ ! -d .fw-worktrees/hello-world ]
+  ! git show-ref --verify --quiet refs/heads/fw/hello-world
+  [ ! -f .fw-worktrees/hello-world.base ]
+}
+
+@test "name .. is rejected without touching any state" {
+  run "$COLLECT" ".." --reject </dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid worktree name"* ]]
+  [ -d .fw-worktrees/task1 ]
+  git show-ref --verify --quiet refs/heads/fw/task1
+  [ -f .fw-worktrees/task1.base ]
+}
+
+@test "--reject recovers when the worktree dir was deleted but the branch remains" {
+  rm -rf .fw-worktrees/task1
+  run "$COLLECT" task1 --reject </dev/null
+  [ "$status" -eq 0 ]
+  ! git show-ref --verify --quiet refs/heads/fw/task1
+  [ ! -f .fw-worktrees/task1.base ]
+  [ -f .fw-worktrees/task1.log ]
+}
+
+@test "--reject with no worktree, branch, or base file errors" {
+  run "$COLLECT" ghost --reject </dev/null
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"nothing to reject"* ]]
+}
+
+@test "-h prints usage starting with Usage: and no shebang" {
+  run "$COLLECT" -h
+  [ "$status" -ne 0 ]
+  [[ "$output" == Usage:* ]]
+  [[ "$output" != *"#!/usr/bin/env"* ]]
 }

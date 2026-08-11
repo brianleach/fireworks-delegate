@@ -54,9 +54,12 @@ else
     "run: fireconnect opencode on (install: https://github.com/fw-ai/fireconnect), or export FIREWORKS_API_KEY=<key> (get one at https://app.fireworks.ai/settings/users/api-keys), or run: opencode auth login  and pick Fireworks."
 fi
 
-# 3. opencode can resolve the fireworks-ai provider
+# 3. opencode can resolve the fireworks-ai provider. Time-boxed so a hung
+# provider cannot hang preflight, and captured before grepping so an early
+# grep exit cannot turn into a SIGPIPE failure under pipefail.
 if command -v opencode >/dev/null 2>&1; then
-  if opencode models 2>/dev/null | grep -q '^fireworks-ai/'; then
+  models_output=$(with_timeout 30 opencode models 2>/dev/null || true)
+  if grep -q '^fireworks-ai/' <<<"$models_output"; then
     pass "opencode resolves the fireworks-ai provider"
   else
     fail "opencode does not list any fireworks-ai models" \

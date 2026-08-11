@@ -9,7 +9,7 @@
 #   - creates a worktree under .fw-worktrees/<name> on branch fw/<name>,
 #     branched off the current branch
 #   - runs `opencode run` in that worktree with the task spec as the prompt
-#   - captures all output to .fw-worktrees/<name>/delegate.log
+#   - captures all output to .fw-worktrees/<name>.log (next to the worktree)
 #   - auto-commits any changes the model left uncommitted
 #   - prints the worktree path and a diff --stat against the base branch
 #
@@ -20,7 +20,22 @@ DEFAULT_MODEL="fireworks-ai/accounts/fireworks/routers/kimi-k3-us"
 RUN_TIMEOUT_SECS="${FW_DELEGATE_TIMEOUT_SECS:-1800}"
 
 usage() {
-  grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -16
+  cat <<'EOF'
+Usage: delegate.sh <task-spec.md> [--model <provider/model>] [--name <worktree-name>]
+
+Delegate a task spec to an OSS model on Fireworks via OpenCode, in an
+isolated git worktree of the current repo.
+
+Behavior:
+  - creates a worktree under .fw-worktrees/<name> on branch fw/<name>,
+    branched off the current branch
+  - runs `opencode run` in that worktree with the task spec as the prompt
+  - captures all output to .fw-worktrees/<name>.log (next to the worktree)
+  - auto-commits any changes the model left uncommitted
+  - prints the worktree path and a diff --stat against the base branch
+
+Safe to run multiple times in parallel with distinct names.
+EOF
   exit 1
 }
 
@@ -87,10 +102,20 @@ if [ -z "$name" ]; then
 fi
 # Sanitize the name for use as a branch/directory component.
 name="$(printf '%s' "$name" | tr -c 'a-zA-Z0-9._-' '-' | sed 's/^-*//;s/-*$//')"
-[ -n "$name" ] || {
+if [ -z "$name" ]; then
   echo "error: could not derive a valid worktree name" >&2
   exit 1
-}
+fi
+if [ "$name" = "." ] || [ "$name" = ".." ]; then
+  echo "error: invalid worktree name: '$name'" >&2
+  exit 1
+fi
+# The name becomes branch fw/<name>; reject names git cannot use (..,
+# trailing .lock, and friends) before any side effects.
+if ! git check-ref-format "refs/heads/fw/$name"; then
+  echo "error: '$name' is not usable as a git branch name (refs/heads/fw/$name is invalid)" >&2
+  exit 1
+fi
 
 wt_dir="$repo_root/.fw-worktrees/$name"
 branch="fw/$name"
@@ -100,25 +125,19 @@ if [ -e "$wt_dir" ]; then
   exit 1
 fi
 if git show-ref --verify --quiet "refs/heads/$branch"; then
-  echo "error: branch $branch already exists (collect or reject it first)" >&2
+  echo "error: branch $branch already exists" >&2
+  echo "       recover with: scripts/collect.sh $name --reject" >&2
   exit 1
 fi
 
 mkdir -p "$repo_root/.fw-worktrees"
-
-# Keep delegate.log and meta files out of git for every worktree of this repo,
-# without touching the committed .gitignore.
-exclude_file="$(git rev-parse --git-common-dir)/info/exclude"
-for pattern in "delegate.log" ".fw-worktrees/" ".fw-tasks/"; do
-  grep -qxF "$pattern" "$exclude_file" 2>/dev/null || echo "$pattern" >>"$exclude_file"
-done
 
 echo "==> creating worktree $wt_dir on branch $branch (base: $base_branch)"
 git worktree add -b "$branch" "$wt_dir" "$base_branch" >/dev/null
 
 printf '%s\n' "$base_branch" >"$repo_root/.fw-worktrees/$name.base"
 
-log_file="$wt_dir/delegate.log"
+log_file="$repo_root/.fw-worktrees/$name.log"
 prompt="$(cat "$spec_file")"
 
 echo "==> running opencode (model: $model, timeout: ${RUN_TIMEOUT_SECS}s)"
@@ -127,7 +146,7 @@ echo "==> log: $log_file"
 run_status=0
 (
   cd "$wt_dir"
-  with_timeout "$RUN_TIMEOUT_SECS" opencode run -m "$model" "$prompt"
+  with_timeout "$RUN_TIMEOUT_SECS" opencode run -m "$model" -- "$prompt"
 ) <"/dev/null" >"$log_file" 2>&1 || run_status=$?
 
 if [ "$run_status" -ne 0 ]; then

@@ -32,8 +32,9 @@ setup() {
   [ -d .fw-worktrees/happy ]
   git show-ref --verify --quiet refs/heads/fw/happy
 
-  [ -f .fw-worktrees/happy/delegate.log ]
-  grep -q "fake transcript line from stub opencode" .fw-worktrees/happy/delegate.log
+  [ -f .fw-worktrees/happy.log ]
+  grep -q "fake transcript line from stub opencode" .fw-worktrees/happy.log
+  [ ! -f .fw-worktrees/happy/delegate.log ]
 
   [ "$(git show fw/happy:KIMI_WAS_HERE.txt)" = "KIMI WAS HERE" ]
   [[ "$(git log -1 --format=%s fw/happy)" == *"fw-delegate: happy"* ]]
@@ -73,6 +74,40 @@ exit 1'
   [[ "$output" == *"WARNING"* ]]
   [ -d .fw-worktrees/failrun ]
   git show-ref --verify --quiet refs/heads/fw/failrun
-  [ -f .fw-worktrees/failrun/delegate.log ]
-  grep -q "partial transcript before failure" .fw-worktrees/failrun/delegate.log
+  [ -f .fw-worktrees/failrun.log ]
+  grep -q "partial transcript before failure" .fw-worktrees/failrun.log
+}
+
+@test "name sanitizing to an invalid git ref is rejected before side effects" {
+  run "$DELEGATE" "$SPEC" --name "v1..2"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"v1..2"* ]]
+  [ ! -e ".fw-worktrees/v1..2" ]
+  ! git show-ref --verify --quiet refs/heads/fw/v1..2
+}
+
+@test "name of .. is rejected" {
+  run "$DELEGATE" "$SPEC" --name ".."
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid worktree name"* ]]
+}
+
+@test "name sanitizing to empty is rejected" {
+  run "$DELEGATE" "$SPEC" --name "!!!"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not derive a valid worktree name"* ]]
+}
+
+@test "existing branch without worktree: error names the recovery command" {
+  git branch fw/orphan
+  run "$DELEGATE" "$SPEC" --name orphan
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"scripts/collect.sh orphan --reject"* ]]
+}
+
+@test "-h prints usage starting with Usage: and no shebang" {
+  run "$DELEGATE" -h
+  [ "$status" -ne 0 ]
+  [[ "$output" == Usage:* ]]
+  [[ "$output" != *"#!/usr/bin/env"* ]]
 }
