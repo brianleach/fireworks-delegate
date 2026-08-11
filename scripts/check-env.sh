@@ -51,7 +51,7 @@ if [ -n "$key_source" ]; then
   pass "Fireworks API key present via $key_source"
 else
   fail "no Fireworks API key found" \
-    "export FIREWORKS_API_KEY=<key> (get one at https://app.fireworks.ai/settings/users/api-keys), or run: opencode auth login  and pick Fireworks."
+    "run: fireconnect opencode on (install: https://github.com/fw-ai/fireconnect), or export FIREWORKS_API_KEY=<key> (get one at https://app.fireworks.ai/settings/users/api-keys), or run: opencode auth login  and pick Fireworks."
 fi
 
 # 3. opencode can resolve the fireworks-ai provider
