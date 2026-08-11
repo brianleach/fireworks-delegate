@@ -17,10 +17,14 @@ only pays for planning and review.
 2. Claude writes self-contained task specs to `.fw-tasks/`.
 3. `scripts/delegate.sh <spec>` creates a git worktree under
    `.fw-worktrees/<name>`, runs `opencode run` there with the spec as the
-   prompt, logs everything to `delegate.log`, and prints a diff stat.
+   prompt, captures the log to `.fw-worktrees/<name>.log`, and prints a
+   diff stat. With `--pr` it also pushes the branch and opens a draft
+   GitHub PR whose body carries the task spec and the log tail.
 4. Claude reviews the diff and either merges it with
    `scripts/collect.sh <name> --merge`, sends the task back for one
-   revision, or takes it over.
+   revision, or takes it over. Claude posts its review to the PR and only
+   auto-merges small, low-risk diffs; larger diffs wait for the human to
+   decide on the PR.
 
 Independent tasks run in parallel worktrees.
 
@@ -95,11 +99,23 @@ scripts/delegate.sh .fw-tasks/01-add-pagination.md
 scripts/delegate.sh .fw-tasks/01-add-pagination.md \
   --model fireworks-ai/accounts/fireworks/models/deepseek-v3
 
+# delegate and open a draft GitHub PR for review: the branch is pushed
+# and the PR body carries the task spec and the log tail
+scripts/delegate.sh .fw-tasks/01-add-pagination.md --pr
+
 # review, then merge or discard
 scripts/collect.sh 01-add-pagination           # show diff
 scripts/collect.sh 01-add-pagination --merge   # accept
 scripts/collect.sh 01-add-pagination --reject  # discard
+
+# state the base branch explicitly when the recorded one is missing
+# or wrong
+scripts/collect.sh 01-add-pagination --base main
 ```
+
+When a PR exists, `collect.sh` keeps it in sync: `--merge` pushes the
+base branch to origin (when the repo has one) so the PR flips to merged,
+and `--reject` closes the PR.
 
 Environment knobs:
 
