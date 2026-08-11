@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: npm install -g bats
+
+      - name: Install tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install shellcheck
+          npm install -g bats
+
+      - name: Shellcheck
+        run: shellcheck scripts/check-env.sh scripts/delegate.sh scripts/collect.sh install.sh tests/helpers.bash
+
+      - name: Run bats suite
+        run: bats tests/
