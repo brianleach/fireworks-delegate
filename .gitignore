@@ -1,0 +1,18 @@
+# Delegation working state
+.fw-worktrees/
+.fw-tasks/
+
+# Logs
+*.log
+
+# Secrets
+.env
+.env.*
+
+# OpenCode session artifacts
+.opencode/
+opencode.json.bak
+.opencode-sessions/
+
+# OS noise
+.DS_Store
