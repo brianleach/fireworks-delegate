@@ -35,7 +35,19 @@ Independent tasks run in parallel worktrees.
    # or: brew install sst/tap/opencode
    ```
 
-2. Connect Fireworks. Either authenticate through OpenCode:
+2. Connect Fireworks. Recommended: install
+   [FireConnect](https://github.com/fw-ai/fireconnect) and enable OpenCode
+   support:
+
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/fw-ai/fireconnect/main/install.sh | bash
+   fireconnect opencode on
+   ```
+
+   FireConnect handles browser sign-in and API key management
+   automatically.
+
+   Alternatively, set up manually. Either authenticate through OpenCode:
 
    ```sh
    opencode auth login   # select Fireworks, paste your API key
