@@ -1,7 +1,5 @@
 # fireworks-delegate
 
-Status: experimental
-
 A Claude Code skill that lets Claude act as a pure orchestrator: it plans
 and decomposes work, then delegates implementation tasks to OSS models on
 Fireworks AI via [OpenCode](https://opencode.ai), instead of spawning Claude
