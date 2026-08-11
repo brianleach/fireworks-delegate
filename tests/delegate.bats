@@ -111,3 +111,32 @@ exit 1'
   [[ "$output" == Usage:* ]]
   [[ "$output" != *"#!/usr/bin/env"* ]]
 }
+
+@test "--pr without an origin remote: warns and still succeeds" {
+  run "$DELEGATE" "$SPEC" --name pr-noorigin --pr
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--pr requested but"* ]]
+  [ -d .fw-worktrees/pr-noorigin ]
+  git show-ref --verify --quiet refs/heads/fw/pr-noorigin
+  [ -f .fw-worktrees/pr-noorigin.log ]
+}
+
+@test "--pr with origin but no gh on PATH: warns and still succeeds" {
+  setup_origin_remote >/dev/null
+  # A PATH with git and coreutils (and the opencode stub) but no gh. A
+  # dedicated bin dir of symlinks, since CI runners ship gh in /usr/bin.
+  local safe_bin="${BATS_TEST_TMPDIR}/safe-bin"
+  mkdir -p "$safe_bin"
+  local tool tool_path
+  for tool in bash env git tr sed cat dirname basename mkdir perl grep tail mktemp rm; do
+    tool_path="$(command -v "$tool")"
+    ln -sf "$tool_path" "$safe_bin/$tool"
+  done
+  run env PATH="${BATS_TEST_TMPDIR}/bin:${safe_bin}" "$DELEGATE" "$SPEC" --name pr-nogh --pr
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--pr requested but"* ]]
+  [[ "$output" == *"gh"* ]]
+  [ -d .fw-worktrees/pr-nogh ]
+  git show-ref --verify --quiet refs/heads/fw/pr-nogh
+  [ -f .fw-worktrees/pr-nogh.log ]
+}

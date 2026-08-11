@@ -27,6 +27,17 @@ write_task_spec() {
   printf '%s\n' "$spec"
 }
 
+# Create a bare origin repo at ${BATS_TEST_TMPDIR}/origin.git, wire it into
+# the fixture repo as the origin remote, and push the initial main with -u.
+# Prints the bare repo path. Offline: the remote is a plain local directory.
+setup_origin_remote() {
+  local origin="${BATS_TEST_TMPDIR}/origin.git"
+  git init -q --bare -b main "$origin"
+  git remote add origin "$origin"
+  git push -q -u origin main
+  printf '%s\n' "$origin"
+}
+
 # Install a stub opencode at ${BATS_TEST_TMPDIR}/bin/opencode and prepend
 # that directory to PATH. The default stub creates KIMI_WAS_HERE.txt in the
 # current directory, echoes a fake transcript line, and exits 0. Pass a full
