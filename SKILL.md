@@ -101,18 +101,18 @@ stating what you checked, the test results from the log, and an explicit
 Request-changes verdicts are impossible when the PR author and reviewer
 are the same account, so the summary comment is the verdict.
 
-**Human approval rule**: you may merge autonomously only when the diff
-is small and low-risk: at most 50 changed lines across at most 3 files,
-no security-sensitive paths (auth, crypto, payment, secrets handling),
-and the log shows the verification commands ran clean. Anything larger
-or riskier: post your review, give the user the PR URL (or the diff
-summary in local-only mode) with your recommendation, and wait for
-their decision before merging.
+**Human approval rule**: never merge without explicit human approval.
+For every finished task, post your review, give the user the PR URL
+(or the diff summary in local-only mode) with your recommendation
+(merge, revise, or take over), and wait for their decision. A standing
+instruction from earlier in the session does not count as approval for
+a specific diff; ask each time. The only autonomous actions permitted
+are rejecting a worktree and sending a task back for revision.
 
 Then take exactly one of these actions:
 
-- **Accept**: `scripts/collect.sh <name> --merge` (subject to the human
-  approval rule above)
+- **Accept**: `scripts/collect.sh <name> --merge`, only after the user
+  has approved that specific diff
 - **One revision round**: reject the worktree
   (`scripts/collect.sh <name> --reject`), append a `## Revision feedback`
   section to the task spec with concrete, specific corrections, and
