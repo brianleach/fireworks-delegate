@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-08-11
+
+### Fixed
+
+- PR bodies redact the embedded log tail: `$HOME` becomes `~` and
+  secret-shaped lines (API keys, bearer tokens, `*_KEY=` style
+  assignments) are replaced with `[redacted]`. The on-disk log stays
+  complete.
+- `collect.sh --merge` survives a rejected base-branch push (branch
+  protection): it warns with recovery steps, keeps the remote branch so
+  an open PR stays intact, and still cleans up locally.
+- Task specs reach the model as a `.fw-task.md` file in the worktree
+  instead of one giant argv string, avoiding ARG_MAX limits and letting
+  the model re-read the spec mid-run. The file is removed before
+  auto-commit and can never land on the branch.
+
+### Changed
+
+- Script header comments no longer duplicate usage(); `--help` is the
+  single source of truth.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added
@@ -66,5 +87,6 @@ Initial release.
 - README with FireConnect-first setup instructions and a cost note on
   Fireworks serverless pricing.
 
+[0.2.1]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.2.1
 [0.2.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.2.0
 [0.1.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.1.0
