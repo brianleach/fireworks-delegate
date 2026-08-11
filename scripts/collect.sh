@@ -7,8 +7,12 @@
 # Modes:
 #   (default)   show the full diff; if run interactively, prompt to merge;
 #               otherwise print next steps
-#   --merge     merge fw/<name> into the base branch and remove the worktree
-#   --reject    discard the worktree, its branch, and its base record
+#   --merge     merge fw/<name> into the base branch and remove the worktree;
+#               with an origin remote, also push the base branch and delete
+#               the remote fw/<name> branch so an open PR flips to merged
+#   --reject    discard the worktree, its branch, and its base record; with
+#               an origin remote and gh, also close any open PR and delete
+#               the remote fw/<name> branch (failures ignored)
 #
 # The base branch comes from .fw-worktrees/<name>.base, written by
 # delegate.sh; --base overrides that record. The run log lives at
@@ -24,8 +28,12 @@ Review and merge (or reject) a worktree produced by delegate.sh.
 Modes:
   (default)   show the full diff; if run interactively, prompt to merge;
               otherwise print next steps
-  --merge     merge fw/<name> into the base branch and remove the worktree
-  --reject    discard the worktree, its branch, and its base record
+  --merge     merge fw/<name> into the base branch and remove the worktree;
+              with an origin remote, also push the base branch and delete
+              the remote fw/<name> branch so an open PR flips to merged
+  --reject    discard the worktree, its branch, and its base record; with
+              an origin remote and gh, also close any open PR and delete
+              the remote fw/<name> branch (failures ignored)
 
 Options:
   --base <branch>   base branch to diff and merge against; overrides the
@@ -94,6 +102,14 @@ if [ "$mode" = "reject" ]; then
     exit 1
   fi
   echo "==> rejecting $name: removing worktree, branch $branch, and base record"
+  # Best-effort remote cleanup first: close an open PR for the branch and
+  # delete the remote branch. Every failure here is ignored.
+  if git remote get-url origin >/dev/null 2>&1; then
+    if command -v gh >/dev/null 2>&1 && gh pr view "$branch" >/dev/null 2>&1; then
+      gh pr close "$branch" --comment "Rejected via collect.sh --reject" || true
+    fi
+    git push origin --delete "$branch" >/dev/null 2>&1 || true
+  fi
   if [ -d "$wt_dir" ]; then
     git worktree remove --force "$wt_dir"
   fi
@@ -162,6 +178,14 @@ fi
 
 echo "==> merging $branch into $base_branch"
 git merge --no-ff -m "Merge delegated task $name (branch $branch)" "$branch"
+# Keep the remote in sync so an open PR for this branch flips to merged on
+# GitHub: push the base branch, then drop the remote fw branch (it may
+# never have been pushed, so ignore failure there).
+if git remote get-url origin >/dev/null 2>&1; then
+  echo "==> pushing $base_branch to origin"
+  git push origin "$base_branch"
+  git push origin --delete "$branch" >/dev/null 2>&1 || true
+fi
 git worktree remove --force "$wt_dir"
 git branch -D "$branch" >/dev/null 2>&1 || true
 rm -f "$base_file"

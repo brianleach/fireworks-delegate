@@ -3,7 +3,7 @@
 # isolated git worktree of the current repo.
 #
 # Usage:
-#   delegate.sh <task-spec.md> [--model <provider/model>] [--name <worktree-name>]
+#   delegate.sh <task-spec.md> [--model <provider/model>] [--name <worktree-name>] [--pr]
 #
 # Behavior:
 #   - creates a worktree under .fw-worktrees/<name> on branch fw/<name>,
@@ -11,6 +11,9 @@
 #   - runs `opencode run` in that worktree with the task spec as the prompt
 #   - captures all output to .fw-worktrees/<name>.log (next to the worktree)
 #   - auto-commits any changes the model left uncommitted
+#   - with --pr: pushes fw/<name> to origin and opens a draft PR against the
+#     base branch (needs an origin remote and the gh CLI; warns and
+#     continues without failing when either is missing)
 #   - prints the worktree path and a diff --stat against the base branch
 #
 # Safe to run multiple times in parallel with distinct names.
@@ -21,7 +24,7 @@ RUN_TIMEOUT_SECS="${FW_DELEGATE_TIMEOUT_SECS:-1800}"
 
 usage() {
   cat <<'EOF'
-Usage: delegate.sh <task-spec.md> [--model <provider/model>] [--name <worktree-name>]
+Usage: delegate.sh <task-spec.md> [--model <provider/model>] [--name <worktree-name>] [--pr]
 
 Delegate a task spec to an OSS model on Fireworks via OpenCode, in an
 isolated git worktree of the current repo.
@@ -32,6 +35,9 @@ Behavior:
   - runs `opencode run` in that worktree with the task spec as the prompt
   - captures all output to .fw-worktrees/<name>.log (next to the worktree)
   - auto-commits any changes the model left uncommitted
+  - with --pr: pushes fw/<name> to origin and opens a draft PR against the
+    base branch (needs an origin remote and the gh CLI; warns and
+    continues without failing when either is missing)
   - prints the worktree path and a diff --stat against the base branch
 
 Safe to run multiple times in parallel with distinct names.
@@ -54,6 +60,7 @@ with_timeout() {
 spec_file=""
 model="$DEFAULT_MODEL"
 name=""
+pr_requested=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -66,6 +73,10 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || usage
       name="$2"
       shift 2
+      ;;
+    --pr)
+      pr_requested=1
+      shift
       ;;
     -h | --help)
       usage
@@ -132,6 +143,13 @@ fi
 
 mkdir -p "$repo_root/.fw-worktrees"
 
+# Keep the runtime state dirs out of git status in repos that do not
+# gitignore them, without touching the committed .gitignore.
+exclude_file="$(git rev-parse --git-common-dir)/info/exclude"
+for pattern in ".fw-worktrees/" ".fw-tasks/"; do
+  grep -qxF "$pattern" "$exclude_file" 2>/dev/null || echo "$pattern" >>"$exclude_file"
+done
+
 echo "==> creating worktree $wt_dir on branch $branch (base: $base_branch)"
 git worktree add -b "$branch" "$wt_dir" "$base_branch" >/dev/null
 
@@ -159,6 +177,39 @@ fi
 if [ -n "$(git -C "$wt_dir" status --porcelain)" ]; then
   git -C "$wt_dir" add -A
   git -C "$wt_dir" commit -q -m "fw-delegate: $name (auto-commit of delegated work)"
+fi
+
+if [ "$pr_requested" -eq 1 ]; then
+  if [ "$(git -C "$wt_dir" rev-list --count "$base_branch..$branch")" -eq 0 ]; then
+    echo "==> --pr requested but $branch has no commits beyond $base_branch; skipping PR creation"
+  elif ! git -C "$wt_dir" remote get-url origin >/dev/null 2>&1; then
+    echo "WARNING: --pr requested but this repo has no origin remote; skipping PR creation." >&2
+  elif ! command -v gh >/dev/null 2>&1; then
+    echo "WARNING: --pr requested but the GitHub CLI (gh) is not on PATH; skipping PR creation." >&2
+  else
+    pr_body="$(mktemp "${TMPDIR:-/tmp}/fw-delegate-pr.XXXXXX")"
+    {
+      printf '## Task spec\n\n'
+      cat "$spec_file"
+      printf '\n## Delegate log (tail)\n\n```\n'
+      tail -n 100 "$log_file"
+      printf '```\n'
+    } >"$pr_body"
+    if (cd "$wt_dir" && git push -u origin "$branch"); then
+      if pr_url="$(
+        cd "$wt_dir" && gh pr create --draft \
+          --base "$base_branch" --head "$branch" \
+          --title "fw-delegate: $name" --body-file "$pr_body"
+      )"; then
+        echo "==> draft PR: $pr_url"
+      else
+        echo "WARNING: --pr requested but gh pr create failed; branch $branch is pushed, open the PR by hand." >&2
+      fi
+    else
+      echo "WARNING: --pr requested but git push -u origin $branch failed; skipping PR creation." >&2
+    fi
+    rm -f "$pr_body"
+  fi
 fi
 
 echo

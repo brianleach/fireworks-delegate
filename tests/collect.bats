@@ -144,3 +144,29 @@ setup() {
   [[ "$output" == Usage:* ]]
   [[ "$output" != *"#!/usr/bin/env"* ]]
 }
+
+@test "--merge with an origin remote pushes base and deletes the remote fw branch" {
+  local origin
+  origin="$(setup_origin_remote)"
+  # Simulate delegate.sh --pr having pushed the fw branch.
+  git push -q origin fw/task1
+  run "$COLLECT" task1 --merge </dev/null
+  [ "$status" -eq 0 ]
+  [ "$(git --git-dir="$origin" rev-parse main)" = "$(git rev-parse main)" ]
+  ! git --git-dir="$origin" show-ref --verify --quiet refs/heads/fw/task1
+  [ -f KIMI_WAS_HERE.txt ]
+  [ ! -d .fw-worktrees/task1 ]
+  ! git show-ref --verify --quiet refs/heads/fw/task1
+  [ -f .fw-worktrees/task1.log ]
+}
+
+@test "--reject without an origin remote behaves exactly as before" {
+  run "$COLLECT" task1 --reject </dev/null
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rejecting task1"* ]]
+  [[ "$output" == *"done"* ]]
+  [ ! -d .fw-worktrees/task1 ]
+  ! git show-ref --verify --quiet refs/heads/fw/task1
+  [ ! -f .fw-worktrees/task1.base ]
+  [ -f .fw-worktrees/task1.log ]
+}
