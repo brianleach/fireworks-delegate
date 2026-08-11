@@ -128,7 +128,7 @@ run_status=0
 (
   cd "$wt_dir"
   with_timeout "$RUN_TIMEOUT_SECS" opencode run -m "$model" "$prompt"
-) >"$log_file" 2>&1 || run_status=$?
+) <"/dev/null" >"$log_file" 2>&1 || run_status=$?
 
 if [ "$run_status" -ne 0 ]; then
   echo "WARNING: opencode exited with status $run_status (timeout or error)." >&2

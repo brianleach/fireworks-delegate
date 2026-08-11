@@ -69,7 +69,7 @@ if [ "$failures" -eq 0 ]; then
   printf '...   smoke test: opencode run -m %s (timeout %ss)\n' "$DEFAULT_MODEL" "$SMOKE_TIMEOUT_SECS"
   smoke_output=""
   if smoke_output=$(with_timeout "$SMOKE_TIMEOUT_SECS" opencode run -m "$DEFAULT_MODEL" \
-    "Reply with the single word: ready" 2>&1) && [ -n "$smoke_output" ]; then
+    "Reply with the single word: ready" </dev/null 2>&1) && [ -n "$smoke_output" ]; then
     pass "smoke test succeeded (model responded: $(printf '%s' "$smoke_output" | tail -c 200 | tr '\n' ' '))"
   else
     fail "smoke test against $DEFAULT_MODEL failed" \
