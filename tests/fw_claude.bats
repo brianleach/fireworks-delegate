@@ -24,13 +24,13 @@ setup() {
   cd "$BATS_TEST_TMPDIR"
   printf 'FIREWORKS_API_KEY=fw_from_dotenv\nFW_BASE_URL=https://example.test/inference\n' >dotenv
   stub_claude '#!/usr/bin/env bash
-printf "auth_token: %s\n" "${ANTHROPIC_AUTH_TOKEN:-}"
+printf "api_key: %s\n" "${ANTHROPIC_API_KEY:-}"
 printf "base_url: %s\n" "${ANTHROPIC_BASE_URL:-}"
 exit 0'
   run env -u FIREWORKS_API_KEY -u FW_BASE_URL "FW_ENV_FILE=${BATS_TEST_TMPDIR}/dotenv" \
     "$FW_CLAUDE" "accounts/fireworks/routers/kimi-k3-us" -p "hi"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"auth_token: fw_from_dotenv"* ]]
+  [[ "$output" == *"api_key: fw_from_dotenv"* ]]
   [[ "$output" == *"base_url: https://example.test/inference"* ]]
 }
 
@@ -38,12 +38,12 @@ exit 0'
   cd "$BATS_TEST_TMPDIR"
   printf 'FIREWORKS_API_KEY=fw_from_dotenv\n' >dotenv
   stub_claude '#!/usr/bin/env bash
-printf "auth_token: %s\n" "${ANTHROPIC_AUTH_TOKEN:-}"
+printf "api_key: %s\n" "${ANTHROPIC_API_KEY:-}"
 exit 0'
   run env FIREWORKS_API_KEY=fw_from_environment "FW_ENV_FILE=${BATS_TEST_TMPDIR}/dotenv" \
     "$FW_CLAUDE" "accounts/fireworks/routers/kimi-k3-us" -p "hi"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"auth_token: fw_from_environment"* ]]
+  [[ "$output" == *"api_key: fw_from_environment"* ]]
 }
 
 @test "model with unexpected characters is rejected" {
@@ -57,11 +57,12 @@ exit 0'
   stub_claude '#!/usr/bin/env bash
 printf "argv: %s\n" "$*"
 printf "base_url: %s\n" "${ANTHROPIC_BASE_URL:-}"
-printf "auth_token: %s\n" "${ANTHROPIC_AUTH_TOKEN:-}"
+printf "api_key: %s\n" "${ANTHROPIC_API_KEY:-}"
 printf "model_env: %s\n" "${ANTHROPIC_MODEL:-}"
-printf "api_key_unset: %s\n" "${ANTHROPIC_API_KEY-unset}"
+printf "auth_token_unset: %s\n" "${ANTHROPIC_AUTH_TOKEN-unset}"
+printf "model_window: %s\n" "${CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT:-}"
 exit 0'
-  run env FIREWORKS_API_KEY=fw_test ANTHROPIC_API_KEY=leftover \
+  run env FIREWORKS_API_KEY=fw_test ANTHROPIC_AUTH_TOKEN=leftover \
     "$FW_CLAUDE" "accounts/fireworks/routers/kimi-k3-us" -p "hello"
   [ "$status" -eq 0 ]
   [[ "$output" == *"--model accounts/fireworks/routers/kimi-k3-us"* ]]
@@ -69,7 +70,8 @@ exit 0'
   [[ "$output" == *"--disallowedTools WebSearch,WebFetch"* ]]
   [[ "$output" == *"-p hello"* ]]
   [[ "$output" == *"base_url: https://api.fireworks.ai/inference"* ]]
-  [[ "$output" == *"auth_token: fw_test"* ]]
+  [[ "$output" == *"api_key: fw_test"* ]]
   [[ "$output" == *"model_env: accounts/fireworks/routers/kimi-k3-us"* ]]
-  [[ "$output" == *"api_key_unset: unset"* ]]
+  [[ "$output" == *"auth_token_unset: unset"* ]]
+  [[ "$output" == *"model_window: 1"* ]]
 }
