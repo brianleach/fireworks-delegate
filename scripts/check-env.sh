@@ -7,9 +7,21 @@
 set -euo pipefail
 
 DEFAULT_MODEL="accounts/fireworks/routers/kimi-k3-us"
-FW_BASE_URL="${FW_BASE_URL:-https://api.fireworks.ai/inference}"
 SMOKE_TIMEOUT_SECS="${FW_SMOKE_TIMEOUT_SECS:-120}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Load the gitignored .env from the skill repo root, tracking where the
+# key came from so the report can say so. Environment variables win.
+key_source="environment"
+if [ -z "${FIREWORKS_API_KEY:-}" ]; then
+  key_source=""
+fi
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/load-env.sh"
+if [ -z "$key_source" ] && [ -n "${FIREWORKS_API_KEY:-}" ]; then
+  key_source=".env file"
+fi
+FW_BASE_URL="${FW_BASE_URL:-https://api.fireworks.ai/inference}"
 
 failures=0
 
@@ -47,10 +59,10 @@ fi
 
 # 2. Fireworks API key present
 if [ -n "${FIREWORKS_API_KEY:-}" ]; then
-  pass "FIREWORKS_API_KEY is set"
+  pass "FIREWORKS_API_KEY present via $key_source"
 else
   fail "FIREWORKS_API_KEY is not set" \
-    "export FIREWORKS_API_KEY=<key> (get one at https://app.fireworks.ai/settings/users/api-keys)"
+    "export FIREWORKS_API_KEY=<key>, or put FIREWORKS_API_KEY=<key> in the skill repo's gitignored .env file (get one at https://app.fireworks.ai/settings/users/api-keys)"
 fi
 
 # 3. Conflicting auth overrides in Claude Code settings files. An env block

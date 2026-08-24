@@ -4,7 +4,13 @@ All notable changes to this project are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] - 2026-08-23
+## [0.3.0] - 2026-08-24
+
+### Added
+
+- Optional `.env` at the skill repo root (gitignored) for
+  `FIREWORKS_API_KEY` and `FW_BASE_URL`, loaded by the new
+  `scripts/load-env.sh` helper; environment variables always win.
 
 ### Changed
 
@@ -13,7 +19,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   Anthropic compatibility endpoint (`api.fireworks.ai/inference`),
   scoped per invocation through the new `scripts/fw-claude.sh` wrapper.
   The orchestrator session stays on Anthropic; global Claude Code
-  settings are never modified.
+  settings are never modified. Delegate sessions run with
+  `--permission-mode acceptEdits` and the Bash tool pre-approved (no
+  `--dangerously-skip-permissions`), so configured deny rules still
+  apply.
 - Default model ID drops the OpenCode provider prefix:
   `accounts/fireworks/routers/kimi-k3-us`. A legacy `fireworks-ai/`
   prefix on `--model` is accepted and stripped.

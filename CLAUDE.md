@@ -14,6 +14,9 @@ of spawning Claude subagents.
     endpoint reachable, smoke test
   - `fw-claude.sh` - shared wrapper that runs claude against the Fireworks
     endpoint with a scoped, per-invocation environment
+  - `load-env.sh` - sourced helper that fills FIREWORKS_API_KEY and
+    FW_BASE_URL from the gitignored .env at this repo's root when they
+    are not already set (environment variables win)
   - `delegate.sh` - run a task spec in an isolated git worktree via a
     headless claude -p session
   - `collect.sh` - review, merge, or reject a finished worktree
@@ -33,4 +36,8 @@ of spawning Claude subagents.
 - Delegate runs reach Fireworks only through per-invocation environment
   variables set by `fw-claude.sh`. Never flip the user's global Claude Code
   configuration (no fireconnect-style rewrites of `~/.claude/settings.json`).
+- Secrets come from the environment or the gitignored `.env` at this
+  repo's root, loaded by `scripts/load-env.sh`. The environment wins.
+- Delegate sessions use `--permission-mode acceptEdits --allowedTools Bash`,
+  never `--dangerously-skip-permissions`.
 - AGENTS.md is a symlink to this file. Edit CLAUDE.md only.

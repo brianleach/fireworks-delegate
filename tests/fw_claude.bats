@@ -13,10 +13,37 @@ setup() {
   [[ "$output" == *"usage: fw-claude.sh"* ]]
 }
 
-@test "missing FIREWORKS_API_KEY: exits nonzero" {
-  run env -u FIREWORKS_API_KEY "$FW_CLAUDE" "accounts/fireworks/routers/kimi-k3-us" -p "hi"
+@test "missing FIREWORKS_API_KEY and no .env: exits nonzero" {
+  run env -u FIREWORKS_API_KEY "FW_ENV_FILE=${BATS_TEST_TMPDIR}/no-env" \
+    "$FW_CLAUDE" "accounts/fireworks/routers/kimi-k3-us" -p "hi"
   [ "$status" -ne 0 ]
   [[ "$output" == *"FIREWORKS_API_KEY is not set"* ]]
+}
+
+@test "key and base URL are loaded from the .env file" {
+  cd "$BATS_TEST_TMPDIR"
+  printf 'FIREWORKS_API_KEY=fw_from_dotenv\nFW_BASE_URL=https://example.test/inference\n' >dotenv
+  stub_claude '#!/usr/bin/env bash
+printf "auth_token: %s\n" "${ANTHROPIC_AUTH_TOKEN:-}"
+printf "base_url: %s\n" "${ANTHROPIC_BASE_URL:-}"
+exit 0'
+  run env -u FIREWORKS_API_KEY -u FW_BASE_URL "FW_ENV_FILE=${BATS_TEST_TMPDIR}/dotenv" \
+    "$FW_CLAUDE" "accounts/fireworks/routers/kimi-k3-us" -p "hi"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auth_token: fw_from_dotenv"* ]]
+  [[ "$output" == *"base_url: https://example.test/inference"* ]]
+}
+
+@test "environment key wins over the .env file" {
+  cd "$BATS_TEST_TMPDIR"
+  printf 'FIREWORKS_API_KEY=fw_from_dotenv\n' >dotenv
+  stub_claude '#!/usr/bin/env bash
+printf "auth_token: %s\n" "${ANTHROPIC_AUTH_TOKEN:-}"
+exit 0'
+  run env FIREWORKS_API_KEY=fw_from_environment "FW_ENV_FILE=${BATS_TEST_TMPDIR}/dotenv" \
+    "$FW_CLAUDE" "accounts/fireworks/routers/kimi-k3-us" -p "hi"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auth_token: fw_from_environment"* ]]
 }
 
 @test "model with unexpected characters is rejected" {

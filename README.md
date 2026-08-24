@@ -36,7 +36,10 @@ The Fireworks connection is scoped to each delegate run:
 `scripts/fw-claude.sh` sets `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
 and the model slots in the child process environment only. Your
 interactive Claude Code sessions and global `~/.claude/settings.json` are
-never touched, so there is nothing to switch back afterwards. Two
+never touched, so there is nothing to switch back afterwards. Delegate
+sessions run with edits auto-accepted and the Bash tool pre-approved
+(they must run your test suite), not with a blanket permission bypass:
+deny rules from your Claude Code settings still apply. Two
 trade-offs of the compatibility endpoint to know about: Anthropic's
 server-side WebSearch and WebFetch tools are unavailable (the scripts
 disallow them), and prompt caching is not applied.
@@ -47,12 +50,24 @@ disallow them), and prompt caching is not applied.
    as a Claude Code user; otherwise see
    https://code.claude.com/docs/en/setup).
 
-2. Export a Fireworks API key (get one at
-   https://app.fireworks.ai/settings/users/api-keys):
+2. Provide a Fireworks API key (get one at
+   https://app.fireworks.ai/settings/users/api-keys). Either export it:
 
    ```sh
    export FIREWORKS_API_KEY=fw_...
    ```
+
+   or put it in a `.env` file at the root of your fireworks-delegate
+   checkout, where it is gitignored:
+
+   ```sh
+   echo 'FIREWORKS_API_KEY=fw_...' >> /path/to/fireworks-delegate/.env
+   ```
+
+   The scripts read that `.env` (resolved relative to the scripts
+   themselves, not the repo you are working on) only for values missing
+   from the environment; a real environment variable always wins.
+   `FW_BASE_URL` can live there too.
 
    Note for [FireConnect](https://github.com/fw-ai/fireconnect) users:
    `fireconnect claude on` is not needed and is best left off. It rewrites

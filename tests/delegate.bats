@@ -134,7 +134,9 @@ exit 0'
   local args
   args="$(git show fw/argcheck:claude-args.txt)"
   [[ "$args" == *"--model accounts/fireworks/routers/kimi-k3-us"* ]]
-  [[ "$args" == *"--dangerously-skip-permissions"* ]]
+  [[ "$args" == *"--permission-mode acceptEdits"* ]]
+  [[ "$args" == *"--allowedTools Bash"* ]]
+  [[ "$args" != *"--dangerously-skip-permissions"* ]]
   [[ "$args" == *"--output-format stream-json"* ]]
   [[ "$args" == *".fw-task.md"* ]]
 }

@@ -26,7 +26,7 @@ jobs:
           npm install -g bats
 
       - name: Shellcheck
-        run: shellcheck scripts/check-env.sh scripts/delegate.sh scripts/collect.sh scripts/fw-claude.sh install.sh tests/helpers.bash
+        run: shellcheck scripts/check-env.sh scripts/delegate.sh scripts/collect.sh scripts/fw-claude.sh scripts/load-env.sh install.sh tests/helpers.bash
 
       - name: Run bats suite
         run: bats tests/

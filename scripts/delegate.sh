@@ -201,15 +201,18 @@ prompt="Read the file .fw-task.md in the current directory and complete the task
 echo "==> running claude -p (model: $model, timeout: ${RUN_TIMEOUT_SECS}s)"
 echo "==> log: $log_file"
 
-# The worktree is the isolation boundary, so the delegate session runs
-# with permission checks off, exactly like the previous OpenCode runner
-# did. stream-json keeps the full transcript (tool calls, test output,
-# final summary) in the log for review.
+# The delegate needs to edit files and run the spec's verification
+# commands, so edits are auto-accepted and the Bash tool is pre-approved.
+# This is not a blanket bypass: deny rules from the user's Claude Code
+# settings still apply, and the worktree keeps the blast radius to a
+# branch that is reviewed before merge. stream-json keeps the full
+# transcript (tool calls, test output, final summary) in the log.
 run_status=0
 (
   cd "$wt_dir"
   with_timeout "$RUN_TIMEOUT_SECS" "$SCRIPT_DIR/fw-claude.sh" "$model" \
-    -p --dangerously-skip-permissions --no-session-persistence \
+    -p --permission-mode acceptEdits --allowedTools Bash \
+    --no-session-persistence \
     --output-format stream-json --verbose \
     "$prompt"
 ) <"/dev/null" >"$log_file" 2>&1 || run_status=$?

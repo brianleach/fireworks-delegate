@@ -4,6 +4,9 @@
 # Used by check-env.sh and delegate.sh. Run with no arguments for usage.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/load-env.sh"
 FW_BASE_URL="${FW_BASE_URL:-https://api.fireworks.ai/inference}"
 
 if [ $# -lt 1 ]; then
@@ -30,7 +33,7 @@ case "$FW_BASE_URL" in
 esac
 
 if [ -z "${FIREWORKS_API_KEY:-}" ]; then
-  echo "error: FIREWORKS_API_KEY is not set" >&2
+  echo "error: FIREWORKS_API_KEY is not set (export it, or put it in the skill repo's gitignored .env)" >&2
   exit 1
 fi
 
