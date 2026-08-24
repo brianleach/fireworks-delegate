@@ -9,10 +9,5 @@
 .env
 .env.*
 
-# OpenCode session artifacts
-.opencode/
-opencode.json.bak
-.opencode-sessions/
-
 # OS noise
 .DS_Store

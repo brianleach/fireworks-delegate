@@ -1,23 +1,32 @@
 #!/usr/bin/env bash
-# Delegate a task spec to an OSS model on Fireworks via OpenCode, in an
-# isolated git worktree of the current repo. Run with --help for usage.
+# Delegate a task spec to an OSS model on Fireworks via a headless Claude
+# Code session (claude -p pointed at the Fireworks Anthropic compatibility
+# endpoint), in an isolated git worktree of the current repo. Run with
+# --help for usage.
 set -euo pipefail
 
-DEFAULT_MODEL="fireworks-ai/accounts/fireworks/routers/kimi-k3-us"
+DEFAULT_MODEL="accounts/fireworks/routers/kimi-k3-us"
 RUN_TIMEOUT_SECS="${FW_DELEGATE_TIMEOUT_SECS:-1800}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
   cat <<'EOF'
-Usage: delegate.sh <task-spec.md> [--model <provider/model>] [--name <worktree-name>] [--pr]
+Usage: delegate.sh <task-spec.md> [--model <fireworks-model-id>] [--name <worktree-name>] [--pr]
 
-Delegate a task spec to an OSS model on Fireworks via OpenCode, in an
-isolated git worktree of the current repo.
+Delegate a task spec to an OSS model on Fireworks via a headless Claude
+Code session, in an isolated git worktree of the current repo.
+
+The model is a Fireworks model ID such as
+accounts/fireworks/routers/kimi-k3-us (a legacy fireworks-ai/ prefix is
+accepted and stripped).
 
 Behavior:
   - creates a worktree under .fw-worktrees/<name> on branch fw/<name>,
     branched off the current branch
-  - copies the spec into the worktree as .fw-task.md and runs
-    `opencode run` there with a short prompt pointing at that file
+  - copies the spec into the worktree as .fw-task.md and runs `claude -p`
+    there (via fw-claude.sh) with a short prompt pointing at that file;
+    the log is the session transcript in stream-json format, one JSON
+    event per line
   - captures all output to .fw-worktrees/<name>.log (next to the worktree)
   - auto-commits any changes the model left uncommitted
   - with --pr: pushes fw/<name> to origin and opens a draft PR against the
@@ -118,6 +127,9 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$spec_file" ] || usage
+
+# Back-compat: strip the OpenCode-era provider prefix from model IDs.
+model="${model#fireworks-ai/}"
 if [ ! -f "$spec_file" ]; then
   echo "error: task spec not found: $spec_file" >&2
   exit 1
@@ -186,17 +198,24 @@ cp "$spec_file" "$wt_dir/.fw-task.md"
 log_file="$repo_root/.fw-worktrees/$name.log"
 prompt="Read the file .fw-task.md in the current directory and complete the task it describes. Do not modify or delete .fw-task.md."
 
-echo "==> running opencode (model: $model, timeout: ${RUN_TIMEOUT_SECS}s)"
+echo "==> running claude -p (model: $model, timeout: ${RUN_TIMEOUT_SECS}s)"
 echo "==> log: $log_file"
 
+# The worktree is the isolation boundary, so the delegate session runs
+# with permission checks off, exactly like the previous OpenCode runner
+# did. stream-json keeps the full transcript (tool calls, test output,
+# final summary) in the log for review.
 run_status=0
 (
   cd "$wt_dir"
-  with_timeout "$RUN_TIMEOUT_SECS" opencode run -m "$model" -- "$prompt"
+  with_timeout "$RUN_TIMEOUT_SECS" "$SCRIPT_DIR/fw-claude.sh" "$model" \
+    -p --dangerously-skip-permissions --no-session-persistence \
+    --output-format stream-json --verbose \
+    "$prompt"
 ) <"/dev/null" >"$log_file" 2>&1 || run_status=$?
 
 if [ "$run_status" -ne 0 ]; then
-  echo "WARNING: opencode exited with status $run_status (timeout or error)." >&2
+  echo "WARNING: claude exited with status $run_status (timeout or error)." >&2
   echo "         Inspect the log before trusting the result: $log_file" >&2
 fi
 
@@ -224,7 +243,9 @@ if [ "$pr_requested" -eq 1 ]; then
       printf '## Task spec\n\n'
       cat "$spec_file"
       printf '\n## Delegate log (tail)\n\n```\n'
-      tail -n 100 "$log_file" | redact_log
+      # stream-json events can be arbitrarily long lines; truncate after
+      # redaction so the PR body stays under GitHub's size limit.
+      tail -n 100 "$log_file" | redact_log | cut -c -400
       printf '```\n'
     } >"$pr_body"
     if (cd "$wt_dir" && git push -u origin "$branch"); then

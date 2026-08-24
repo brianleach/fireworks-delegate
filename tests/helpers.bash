@@ -38,22 +38,24 @@ setup_origin_remote() {
   printf '%s\n' "$origin"
 }
 
-# Install a stub opencode at ${BATS_TEST_TMPDIR}/bin/opencode and prepend
-# that directory to PATH. The default stub creates KIMI_WAS_HERE.txt in the
-# current directory, echoes a fake transcript line, and exits 0. Pass a full
-# replacement script (including the shebang line) as $1 to override the
-# behavior, for example a stub that exits nonzero or sleeps.
-stub_opencode() {
+# Install a stub claude CLI at ${BATS_TEST_TMPDIR}/bin/claude and prepend
+# that directory to PATH, plus a dummy FIREWORKS_API_KEY so fw-claude.sh's
+# key check passes offline. The default stub creates KIMI_WAS_HERE.txt in
+# the current directory, echoes a fake transcript line, and exits 0. Pass a
+# full replacement script (including the shebang line) as $1 to override
+# the behavior, for example a stub that exits nonzero or sleeps.
+stub_claude() {
   local bin_dir="${BATS_TEST_TMPDIR}/bin"
   local body="${1:-}"
   mkdir -p "$bin_dir"
   if [ -z "$body" ]; then
     body='#!/usr/bin/env bash
 printf "KIMI WAS HERE\n" > KIMI_WAS_HERE.txt
-printf "fake transcript line from stub opencode\n"
+printf "fake transcript line from stub claude\n"
 exit 0'
   fi
-  printf '%s\n' "$body" >"${bin_dir}/opencode"
-  chmod +x "${bin_dir}/opencode"
+  printf '%s\n' "$body" >"${bin_dir}/claude"
+  chmod +x "${bin_dir}/claude"
   export PATH="${bin_dir}:${PATH}"
+  export FIREWORKS_API_KEY="${FIREWORKS_API_KEY:-fw_offline_stub_key}"
 }

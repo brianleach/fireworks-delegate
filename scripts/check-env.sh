@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Preflight check for the fireworks-delegate skill.
-# Verifies: opencode installed, Fireworks API key available, fireworks-ai
-# provider resolvable, and a live smoke test against the default model.
-# Exits nonzero with fix instructions if anything is missing.
+# Verifies: claude CLI installed, Fireworks API key available, the
+# Fireworks Anthropic compatibility endpoint reachable, and a live smoke
+# test through claude -p against the default model. Exits nonzero with
+# fix instructions if anything is missing.
 set -euo pipefail
 
-DEFAULT_MODEL="fireworks-ai/accounts/fireworks/routers/kimi-k3-us"
+DEFAULT_MODEL="accounts/fireworks/routers/kimi-k3-us"
+FW_BASE_URL="${FW_BASE_URL:-https://api.fireworks.ai/inference}"
 SMOKE_TIMEOUT_SECS="${FW_SMOKE_TIMEOUT_SECS:-120}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 failures=0
 
@@ -24,59 +27,83 @@ with_timeout() {
 }
 
 pass() { printf 'ok    %s\n' "$1"; }
+warn() {
+  printf 'warn  %s\n' "$1"
+  printf '      note: %s\n' "$2"
+}
 fail() {
   printf 'FAIL  %s\n' "$1"
   printf '      fix: %s\n' "$2"
   failures=$((failures + 1))
 }
 
-# 1. opencode CLI installed
-if command -v opencode >/dev/null 2>&1; then
-  pass "opencode CLI found: $(command -v opencode) ($(opencode --version 2>/dev/null || echo 'version unknown'))"
+# 1. claude CLI installed
+if command -v claude >/dev/null 2>&1; then
+  pass "claude CLI found: $(command -v claude) ($(claude --version 2>/dev/null || echo 'version unknown'))"
 else
-  fail "opencode CLI not found on PATH" \
-    "install with: npm install -g opencode-ai   (or: brew install sst/tap/opencode)"
+  fail "claude CLI not found on PATH" \
+    "install Claude Code: npm install -g @anthropic-ai/claude-code   (or see https://code.claude.com/docs/en/setup)"
 fi
 
-# 2. Fireworks API key present: env var or opencode auth store
-key_source=""
+# 2. Fireworks API key present
 if [ -n "${FIREWORKS_API_KEY:-}" ]; then
-  key_source="FIREWORKS_API_KEY environment variable"
-elif [ -f "${HOME}/.local/share/opencode/auth.json" ] &&
-  grep -q '"fireworks' "${HOME}/.local/share/opencode/auth.json" 2>/dev/null; then
-  key_source="opencode auth store (~/.local/share/opencode/auth.json)"
-fi
-
-if [ -n "$key_source" ]; then
-  pass "Fireworks API key present via $key_source"
+  pass "FIREWORKS_API_KEY is set"
 else
-  fail "no Fireworks API key found" \
-    "run: fireconnect opencode on (install: https://github.com/fw-ai/fireconnect), or export FIREWORKS_API_KEY=<key> (get one at https://app.fireworks.ai/settings/users/api-keys), or run: opencode auth login  and pick Fireworks."
+  fail "FIREWORKS_API_KEY is not set" \
+    "export FIREWORKS_API_KEY=<key> (get one at https://app.fireworks.ai/settings/users/api-keys)"
 fi
 
-# 3. opencode can resolve the fireworks-ai provider. Time-boxed so a hung
-# provider cannot hang preflight, and captured before grepping so an early
-# grep exit cannot turn into a SIGPIPE failure under pipefail.
-if command -v opencode >/dev/null 2>&1; then
-  models_output=$(with_timeout 30 opencode models 2>/dev/null || true)
-  if grep -q '^fireworks-ai/' <<<"$models_output"; then
-    pass "opencode resolves the fireworks-ai provider"
+# 3. Conflicting auth overrides in Claude Code settings files. An env block
+# in a settings file outranks the environment fw-claude.sh sets, so a
+# stored token or custom header for another provider would be sent to
+# Fireworks and fail auth. Warn, do not fail: the smoke test below is the
+# authoritative verdict.
+for settings_file in "${HOME}/.claude/settings.json" ".claude/settings.json" ".claude/settings.local.json"; do
+  if [ -f "$settings_file" ] &&
+    grep -Eq '"ANTHROPIC_(AUTH_TOKEN|API_KEY|CUSTOM_HEADERS)"' "$settings_file" 2>/dev/null; then
+    warn "auth override found in $settings_file" \
+      "an ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY / ANTHROPIC_CUSTOM_HEADERS env entry there outranks this skill's per-run environment; if the smoke test fails, remove it (fireconnect users: fireconnect claude off)"
+  fi
+done
+
+# 4. The Fireworks Anthropic compatibility endpoint answers with this key
+# and model. Uses curl directly so an endpoint or key problem is separated
+# from claude CLI configuration problems.
+if [ -n "${FIREWORKS_API_KEY:-}" ]; then
+  if command -v curl >/dev/null 2>&1; then
+    body_file="$(mktemp "${TMPDIR:-/tmp}/fw-check-env.XXXXXX")"
+    err_file="$(mktemp "${TMPDIR:-/tmp}/fw-check-env.XXXXXX")"
+    trap 'rm -f "$body_file" "$err_file"' EXIT
+    http_code="$(curl -sS -o "$body_file" -w '%{http_code}' --max-time 30 \
+      -X POST "${FW_BASE_URL}/v1/messages" \
+      -H "Authorization: Bearer ${FIREWORKS_API_KEY}" \
+      -H "anthropic-version: 2023-06-01" \
+      -H "content-type: application/json" \
+      -d '{"model":"'"$DEFAULT_MODEL"'","max_tokens":16,"messages":[{"role":"user","content":"Reply with the single word: ready"}]}' \
+      2>"$err_file")" || http_code="000"
+    if [ "$http_code" = "200" ]; then
+      pass "Fireworks endpoint answered: ${FW_BASE_URL}/v1/messages (model $DEFAULT_MODEL)"
+    else
+      fail "Fireworks endpoint check failed (HTTP $http_code) at ${FW_BASE_URL}/v1/messages" \
+        "check the key is valid and has serverless access; response was: $(cat "$err_file" "$body_file" | tail -c 300 | tr '\n' ' ')"
+    fi
   else
-    fail "opencode does not list any fireworks-ai models" \
-      "run: opencode auth login  and select Fireworks, or add a fireworks-ai provider block to ~/.config/opencode/opencode.json"
+    warn "curl not found, skipping the direct endpoint check" \
+      "the claude smoke test below still exercises the endpoint"
   fi
 fi
 
-# 4. Smoke test: one-shot prompt against the default model
+# 5. Smoke test: one-shot claude -p through fw-claude.sh, the exact path
+# delegate.sh uses.
 if [ "$failures" -eq 0 ]; then
-  printf '...   smoke test: opencode run -m %s (timeout %ss)\n' "$DEFAULT_MODEL" "$SMOKE_TIMEOUT_SECS"
+  printf '...   smoke test: claude -p via fw-claude.sh (model %s, timeout %ss)\n' "$DEFAULT_MODEL" "$SMOKE_TIMEOUT_SECS"
   smoke_output=""
-  if smoke_output=$(with_timeout "$SMOKE_TIMEOUT_SECS" opencode run -m "$DEFAULT_MODEL" \
-    "Reply with the single word: ready" </dev/null 2>&1) && [ -n "$smoke_output" ]; then
+  if smoke_output=$(with_timeout "$SMOKE_TIMEOUT_SECS" "$SCRIPT_DIR/fw-claude.sh" "$DEFAULT_MODEL" \
+    -p "Reply with the single word: ready" </dev/null 2>&1) && [ -n "$smoke_output" ]; then
     pass "smoke test succeeded (model responded: $(printf '%s' "$smoke_output" | tail -c 200 | tr '\n' ' '))"
   else
     fail "smoke test against $DEFAULT_MODEL failed" \
-      "check your Fireworks key is valid and has serverless access; try manually: opencode run -m $DEFAULT_MODEL \"say hello\". Output was: $(printf '%s' "$smoke_output" | tail -c 300 | tr '\n' ' ')"
+      "if the endpoint check above passed, look for conflicting ANTHROPIC_* env entries in ~/.claude/settings.json or .claude/settings.json (see any warnings above). Try manually: scripts/fw-claude.sh $DEFAULT_MODEL -p \"say hello\". Output was: $(printf '%s' "$smoke_output" | tail -c 300 | tr '\n' ' ')"
   fi
 else
   printf 'skip  smoke test (fix the failures above first)\n'
