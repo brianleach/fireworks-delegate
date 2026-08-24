@@ -53,15 +53,25 @@ settings_json="$(printf '{"env":{"ANTHROPIC_BASE_URL":"%s","ANTHROPIC_MODEL":"%s
 
 # WebSearch and WebFetch are Anthropic server-side tools that the Fireworks
 # compatibility endpoint rejects, so they are disallowed for every run.
-# ANTHROPIC_API_KEY and the cloud-provider switches are dropped so they
-# cannot fight the auth token or reroute the request.
+# ANTHROPIC_AUTH_TOKEN and the cloud-provider switches are dropped so they
+# cannot fight the API key or reroute the request.
+#
+# The key travels as ANTHROPIC_API_KEY (the x-api-key header), not as
+# ANTHROPIC_AUTH_TOKEN: claude 2.1.x prefers its own subscription OAuth
+# bearer over ANTHROPIC_AUTH_TOKEN, so a bearer-only run reaches Fireworks
+# with the wrong credential and comes back 401. Fireworks accepts x-api-key.
+#
+# CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT keeps claude from
+# blocking on the context-window lookup for a model ID it does not know.
+# Every Fireworks model ID is unknown to it, so without this the run hangs
+# instead of returning.
 exec env \
-  -u ANTHROPIC_API_KEY \
+  -u ANTHROPIC_AUTH_TOKEN \
   -u CLAUDE_CODE_USE_BEDROCK \
   -u CLAUDE_CODE_USE_VERTEX \
   -u CLAUDE_CODE_USE_FOUNDRY \
   ANTHROPIC_BASE_URL="$FW_BASE_URL" \
-  ANTHROPIC_AUTH_TOKEN="$FIREWORKS_API_KEY" \
+  ANTHROPIC_API_KEY="$FIREWORKS_API_KEY" \
   ANTHROPIC_MODEL="$model" \
   ANTHROPIC_DEFAULT_OPUS_MODEL="$model" \
   ANTHROPIC_DEFAULT_SONNET_MODEL="$model" \
@@ -69,5 +79,6 @@ exec env \
   ANTHROPIC_SMALL_FAST_MODEL="$model" \
   CLAUDE_CODE_SUBAGENT_MODEL="$model" \
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+  CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 \
   claude --model "$model" --settings "$settings_json" \
   --disallowedTools "WebSearch,WebFetch" "$@"
