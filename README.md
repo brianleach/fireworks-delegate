@@ -39,7 +39,10 @@ interactive Claude Code sessions and global `~/.claude/settings.json` are
 never touched, so there is nothing to switch back afterwards. Delegate
 sessions run with edits auto-accepted and the Bash tool pre-approved
 (they must run your test suite), not with a blanket permission bypass:
-deny rules from your Claude Code settings still apply. Two
+deny rules from your Claude Code settings still apply. In the rare case
+a delegate does hit a denial (a configured deny rule firing, or a write
+outside its worktree), `delegate.sh` prints a warning next to the diff
+stat and the full denial text is in the transcript log. Two
 trade-offs of the compatibility endpoint to know about: Anthropic's
 server-side WebSearch and WebFetch tools are unavailable (the scripts
 disallow them), and prompt caching is not applied.

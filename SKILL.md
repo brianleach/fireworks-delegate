@@ -96,7 +96,9 @@ Never merge blind. For each finished worktree:
    event per line, with `tool_use` events showing every command the
    delegate ran, `tool_result` events showing their output, and a final
    `result` event with the closing summary. Grep it rather than reading
-   it whole; it can be large.
+   it whole; it can be large. If delegate.sh printed a permission-denial
+   warning for the run, treat it as a review finding: check what was
+   blocked and whether the result is still complete.
 2. Run `scripts/collect.sh <name>` to see the full diff.
 3. Judge: is it correct, does it match the spec, do tests pass?
 

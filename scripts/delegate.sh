@@ -222,6 +222,17 @@ if [ "$run_status" -ne 0 ]; then
   echo "         Inspect the log before trusting the result: $log_file" >&2
 fi
 
+# Surface permission denials loudly. With acceptEdits plus an allowed Bash
+# tool these are rare (a configured deny/ask rule firing, or a write
+# outside the worktree), and they would otherwise hide inside the
+# transcript. The patterns match the exact denial texts the claude CLI
+# puts in tool_result entries.
+denial_count="$(grep -cE "Claude requested permissions|Permission to use .* has been denied|was blocked by a deny rule|doesn.t want to proceed with this tool use" "$log_file" 2>/dev/null || true)"
+if [ "${denial_count:-0}" -gt 0 ]; then
+  echo "WARNING: $denial_count permission denial(s) occurred during the delegate run." >&2
+  echo "         The model may have worked around them; review the log: $log_file" >&2
+fi
+
 # The spec copy must never land on the branch: remove it before the
 # auto-commit, even if the model rewrote it.
 rm -f "$wt_dir/.fw-task.md"

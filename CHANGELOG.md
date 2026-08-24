@@ -11,6 +11,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Optional `.env` at the skill repo root (gitignored) for
   `FIREWORKS_API_KEY` and `FW_BASE_URL`, loaded by the new
   `scripts/load-env.sh` helper; environment variables always win.
+- delegate.sh scans the transcript after each run and prints a warning
+  when the delegate hit any permission denials, so a blocked action is
+  visible next to the diff stat instead of hiding in the log.
 
 ### Changed
 

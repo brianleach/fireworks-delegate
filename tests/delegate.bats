@@ -141,6 +141,23 @@ exit 0'
   [[ "$args" == *".fw-task.md"* ]]
 }
 
+@test "permission denials in the transcript produce a warning" {
+  stub_claude '#!/usr/bin/env bash
+printf "%s\n" "{\"type\":\"user\",\"content\":\"Permission to use Bash has been denied.\"}"
+printf "%s\n" "{\"type\":\"user\",\"content\":\"Edit was blocked by a deny rule.\"}"
+exit 0'
+  run "$DELEGATE" "$SPEC" --name denials
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2 permission denial(s)"* ]]
+  [[ "$output" == *"review the log"* ]]
+}
+
+@test "clean run prints no permission denial warning" {
+  run "$DELEGATE" "$SPEC" --name nodenials
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"permission denial"* ]]
+}
+
 @test "legacy fireworks-ai/ model prefix is stripped" {
   stub_claude '#!/usr/bin/env bash
 printf "%s\n" "$*" > claude-args.txt
