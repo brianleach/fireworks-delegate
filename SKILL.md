@@ -1,19 +1,21 @@
 ---
 name: fireworks-delegate
-description: Plan work and delegate implementation tasks to OSS models on Fireworks AI via OpenCode instead of Claude subagents. Use when the user says "delegate to fireworks", "use kimi to build", "fireworks subagents", "delegate this to oss models", or asks to offload implementation to Kimi or Fireworks.
+description: Plan work and delegate implementation tasks to OSS models on Fireworks AI via headless Claude Code sessions instead of Claude subagents. Use when the user says "delegate to fireworks", "use kimi to build", "fireworks subagents", "delegate this to oss models", or asks to offload implementation to Kimi or Fireworks.
 ---
 
 # fireworks-delegate
 
 You are the orchestrator. When this skill is active you must never write
 implementation code yourself. You plan, decompose, delegate to OSS models
-running on Fireworks AI (via OpenCode), review the resulting diffs, and
-either accept, iterate with feedback, or escalate.
+running on Fireworks AI (via headless `claude -p` sessions pointed at the
+Fireworks Anthropic compatibility endpoint), review the resulting diffs,
+and either accept, iterate with feedback, or escalate. Your own session
+stays on Anthropic; only the delegate child processes talk to Fireworks.
 
 All scripts referenced below live in this skill's `scripts/` directory
 (resolve them relative to this SKILL.md file). Run them from the root of
 the repo being worked on. The default model is
-`fireworks-ai/accounts/fireworks/routers/kimi-k3-us`.
+`accounts/fireworks/routers/kimi-k3-us`.
 
 ## Protocol
 
@@ -67,11 +69,12 @@ For each delegated task:
 scripts/delegate.sh .fw-tasks/01-add-login-form.md
 ```
 
-Optional flags: `--model <provider/model>` to override the default,
-`--name <name>` to control the worktree name (defaults to the spec
-filename), `--pr` to push the branch and open a draft GitHub PR whose
-body carries the task spec and the tail of the run log. Timeout is 30
-minutes by default; override with `FW_DELEGATE_TIMEOUT_SECS`.
+Optional flags: `--model <fireworks-model-id>` to override the default
+(e.g. `accounts/fireworks/models/deepseek-v3`), `--name <name>` to
+control the worktree name (defaults to the spec filename), `--pr` to
+push the branch and open a draft GitHub PR whose body carries the task
+spec and the tail of the run log. Timeout is 30 minutes by default;
+override with `FW_DELEGATE_TIMEOUT_SECS`.
 
 Use `--pr` whenever the target repo has a GitHub origin remote and the
 gh CLI is available: it gives the user a first-class review surface and
@@ -88,7 +91,14 @@ branches from the merged result.
 Never merge blind. For each finished worktree:
 
 1. Read `.fw-worktrees/<name>.log` for errors, test results, and
-   whether the model actually ran the verification commands.
+   whether the model actually ran the verification commands. The log is
+   the delegate session's transcript in stream-json format: one JSON
+   event per line, with `tool_use` events showing every command the
+   delegate ran, `tool_result` events showing their output, and a final
+   `result` event with the closing summary. Grep it rather than reading
+   it whole; it can be large. If delegate.sh printed a permission-denial
+   warning for the run, treat it as a review finding: check what was
+   blocked and whether the result is still complete.
 2. Run `scripts/collect.sh <name>` to see the full diff.
 3. Judge: is it correct, does it match the spec, do tests pass?
 

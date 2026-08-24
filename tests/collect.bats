@@ -1,5 +1,5 @@
 # Tests for scripts/collect.sh. Each test first produces a worktree by
-# running delegate.sh against the stub opencode.
+# running delegate.sh against the stub claude.
 
 load helpers
 
@@ -8,7 +8,7 @@ setup() {
   DELEGATE="${REPO_ROOT}/scripts/delegate.sh"
   COLLECT="${REPO_ROOT}/scripts/collect.sh"
   setup_fixture_repo
-  stub_opencode
+  stub_claude
   SPEC="$(write_task_spec)"
   "$DELEGATE" "$SPEC" --name task1 >/dev/null
 }

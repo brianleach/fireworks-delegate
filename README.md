@@ -2,24 +2,28 @@
 
 A Claude Code skill that lets Claude act as a pure orchestrator: it plans
 and decomposes work, then delegates implementation tasks to OSS models on
-Fireworks AI via [OpenCode](https://opencode.ai), instead of spawning Claude
-subagents. Each task runs in an isolated git worktree, Claude reviews the
-diff, and merges or rejects it.
+Fireworks AI, instead of spawning Claude subagents. Each delegated task
+runs in a headless Claude Code session (`claude -p`) pointed at Fireworks'
+[Anthropic compatibility endpoint](https://docs.fireworks.ai/tools-sdks/anthropic-compatibility),
+inside an isolated git worktree. Claude reviews the diff and merges or
+rejects it.
 
 The point: implementation tokens are billed to Fireworks serverless pricing
 (default model is the Kimi K3 US router,
 `accounts/fireworks/routers/kimi-k3-us`), while your Anthropic subscription
-only pays for planning and review.
+only pays for planning and review. No second harness to install: the
+delegate is the same `claude` CLI you already run, and it picks up the
+target repo's CLAUDE.md, hooks, and skills natively.
 
 ## How it works
 
 1. Claude runs `scripts/check-env.sh` to verify the toolchain.
 2. Claude writes self-contained task specs to `.fw-tasks/`.
 3. `scripts/delegate.sh <spec>` creates a git worktree under
-   `.fw-worktrees/<name>`, runs `opencode run` there with the spec as the
-   prompt, captures the log to `.fw-worktrees/<name>.log`, and prints a
-   diff stat. With `--pr` it also pushes the branch and opens a draft
-   GitHub PR whose body carries the task spec and the log tail.
+   `.fw-worktrees/<name>`, runs `claude -p` there with the spec as the
+   prompt, captures the session transcript to `.fw-worktrees/<name>.log`,
+   and prints a diff stat. With `--pr` it also pushes the branch and opens
+   a draft GitHub PR whose body carries the task spec and the log tail.
 4. Claude reviews the diff and either merges it with
    `scripts/collect.sh <name> --merge`, sends the task back for one
    revision, or takes it over. Claude posts its review to the PR and only
@@ -28,43 +32,52 @@ only pays for planning and review.
 
 Independent tasks run in parallel worktrees.
 
+The Fireworks connection is scoped to each delegate run:
+`scripts/fw-claude.sh` sets `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
+and the model slots in the child process environment only. Your
+interactive Claude Code sessions and global `~/.claude/settings.json` are
+never touched, so there is nothing to switch back afterwards. Delegate
+sessions run with edits auto-accepted and the Bash tool pre-approved
+(they must run your test suite), not with a blanket permission bypass:
+deny rules from your Claude Code settings still apply. In the rare case
+a delegate does hit a denial (a configured deny rule firing, or a write
+outside its worktree), `delegate.sh` prints a warning next to the diff
+stat and the full denial text is in the transcript log. Two
+trade-offs of the compatibility endpoint to know about: Anthropic's
+server-side WebSearch and WebFetch tools are unavailable (the scripts
+disallow them), and prompt caching is not applied.
+
 ## Install
 
-1. Install OpenCode:
+1. Make sure the `claude` CLI is installed (it is, if you're reading this
+   as a Claude Code user; otherwise see
+   https://code.claude.com/docs/en/setup).
 
-   ```sh
-   npm install -g opencode-ai
-   # or: brew install sst/tap/opencode
-   ```
-
-2. Connect Fireworks. Recommended: install
-   [FireConnect](https://github.com/fw-ai/fireconnect) and enable OpenCode
-   support:
-
-   ```sh
-   curl -fsSL https://raw.githubusercontent.com/fw-ai/fireconnect/main/install.sh | bash
-   fireconnect opencode on
-   ```
-
-   FireConnect handles browser sign-in and API key management
-   automatically.
-
-   Alternatively, set up manually. Either authenticate through OpenCode:
-
-   ```sh
-   opencode auth login   # select Fireworks, paste your API key
-   ```
-
-   or export the key directly (get one at
-   https://app.fireworks.ai/settings/users/api-keys):
+2. Provide a Fireworks API key (get one at
+   https://app.fireworks.ai/settings/users/api-keys). Either export it:
 
    ```sh
    export FIREWORKS_API_KEY=fw_...
    ```
 
-   Any tool that populates either the `FIREWORKS_API_KEY` environment
-   variable or OpenCode's auth store
-   (`~/.local/share/opencode/auth.json`) also works.
+   or put it in a `.env` file at the root of your fireworks-delegate
+   checkout, where it is gitignored:
+
+   ```sh
+   echo 'FIREWORKS_API_KEY=fw_...' >> /path/to/fireworks-delegate/.env
+   ```
+
+   The scripts read that `.env` (resolved relative to the scripts
+   themselves, not the repo you are working on) only for values missing
+   from the environment; a real environment variable always wins.
+   `FW_BASE_URL` can live there too.
+
+   Note for [FireConnect](https://github.com/fw-ai/fireconnect) users:
+   `fireconnect claude on` is not needed and is best left off. It rewrites
+   your global Claude Code settings so every session runs on Fireworks;
+   this skill instead scopes Fireworks to delegate runs only and just
+   needs the environment variable. If a leftover fireconnect env block is
+   present, `check-env.sh` warns about it.
 
 3. Clone this repo anywhere and symlink it into your Claude Code skills:
 
@@ -97,7 +110,7 @@ scripts/delegate.sh .fw-tasks/01-add-pagination.md
 
 # with a different Fireworks model
 scripts/delegate.sh .fw-tasks/01-add-pagination.md \
-  --model fireworks-ai/accounts/fireworks/models/deepseek-v3
+  --model accounts/fireworks/models/deepseek-v3
 
 # delegate and open a draft GitHub PR for review: the branch is pushed
 # and the PR body carries the task spec and the log tail
@@ -121,6 +134,8 @@ Environment knobs:
 
 - `FW_DELEGATE_TIMEOUT_SECS`: per-task wall clock limit (default 1800)
 - `FW_SMOKE_TIMEOUT_SECS`: check-env smoke test limit (default 120)
+- `FW_BASE_URL`: override the Fireworks endpoint (default
+  `https://api.fireworks.ai/inference`)
 
 ## Cost note
 

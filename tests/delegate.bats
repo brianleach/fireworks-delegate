@@ -1,4 +1,4 @@
-# Tests for scripts/delegate.sh. Fully offline: opencode is a stub on PATH.
+# Tests for scripts/delegate.sh. Fully offline: claude is a stub on PATH.
 
 load helpers
 
@@ -6,7 +6,7 @@ setup() {
   REPO_ROOT="$(fw_repo_root)"
   DELEGATE="${REPO_ROOT}/scripts/delegate.sh"
   setup_fixture_repo
-  stub_opencode
+  stub_claude
   SPEC="$(write_task_spec)"
 }
 
@@ -33,7 +33,7 @@ setup() {
   git show-ref --verify --quiet refs/heads/fw/happy
 
   [ -f .fw-worktrees/happy.log ]
-  grep -q "fake transcript line from stub opencode" .fw-worktrees/happy.log
+  grep -q "fake transcript line from stub claude" .fw-worktrees/happy.log
   [ ! -f .fw-worktrees/happy/delegate.log ]
 
   [ "$(git show fw/happy:KIMI_WAS_HERE.txt)" = "KIMI WAS HERE" ]
@@ -66,7 +66,7 @@ setup() {
 }
 
 @test "stub exiting nonzero: status propagates, worktree and log remain" {
-  stub_opencode '#!/usr/bin/env bash
+  stub_claude '#!/usr/bin/env bash
 printf "partial transcript before failure\n"
 exit 1'
   run "$DELEGATE" "$SPEC" --name failrun
@@ -113,7 +113,7 @@ exit 1'
 }
 
 @test "spec reaches the worktree as .fw-task.md and is never committed" {
-  stub_opencode '#!/usr/bin/env bash
+  stub_claude '#!/usr/bin/env bash
 cp .fw-task.md task-copy.txt
 exit 0'
   run "$DELEGATE" "$SPEC" --name taskfile
@@ -123,6 +123,52 @@ exit 0'
   # .fw-task.md itself is neither on the branch nor left in the worktree.
   ! git cat-file -e "fw/taskfile:.fw-task.md"
   [ ! -e .fw-worktrees/taskfile/.fw-task.md ]
+}
+
+@test "claude receives the model, permission flag, and transcript format" {
+  stub_claude '#!/usr/bin/env bash
+printf "%s\n" "$*" > claude-args.txt
+exit 0'
+  run "$DELEGATE" "$SPEC" --name argcheck
+  [ "$status" -eq 0 ]
+  local args
+  args="$(git show fw/argcheck:claude-args.txt)"
+  [[ "$args" == *"--model accounts/fireworks/routers/kimi-k3-us"* ]]
+  [[ "$args" == *"--permission-mode acceptEdits"* ]]
+  [[ "$args" == *"--allowedTools Bash"* ]]
+  [[ "$args" != *"--dangerously-skip-permissions"* ]]
+  [[ "$args" == *"--output-format stream-json"* ]]
+  [[ "$args" == *".fw-task.md"* ]]
+}
+
+@test "permission denials in the transcript produce a warning" {
+  stub_claude '#!/usr/bin/env bash
+printf "%s\n" "{\"type\":\"user\",\"content\":\"Permission to use Bash has been denied.\"}"
+printf "%s\n" "{\"type\":\"user\",\"content\":\"Edit was blocked by a deny rule.\"}"
+exit 0'
+  run "$DELEGATE" "$SPEC" --name denials
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2 permission denial(s)"* ]]
+  [[ "$output" == *"review the log"* ]]
+}
+
+@test "clean run prints no permission denial warning" {
+  run "$DELEGATE" "$SPEC" --name nodenials
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"permission denial"* ]]
+}
+
+@test "legacy fireworks-ai/ model prefix is stripped" {
+  stub_claude '#!/usr/bin/env bash
+printf "%s\n" "$*" > claude-args.txt
+exit 0'
+  run "$DELEGATE" "$SPEC" --name legacy-model \
+    --model fireworks-ai/accounts/fireworks/models/deepseek-v3
+  [ "$status" -eq 0 ]
+  local args
+  args="$(git show fw/legacy-model:claude-args.txt)"
+  [[ "$args" == *"--model accounts/fireworks/models/deepseek-v3"* ]]
+  [[ "$args" != *"fireworks-ai/"* ]]
 }
 
 @test "--redact-filter: HOME becomes ~ and a FIREWORKS_API_KEY line is redacted" {
@@ -169,12 +215,12 @@ all done"
 
 @test "--pr with origin but no gh on PATH: warns and still succeeds" {
   setup_origin_remote >/dev/null
-  # A PATH with git and coreutils (and the opencode stub) but no gh. A
+  # A PATH with git and coreutils (and the claude stub) but no gh. A
   # dedicated bin dir of symlinks, since CI runners ship gh in /usr/bin.
   local safe_bin="${BATS_TEST_TMPDIR}/safe-bin"
   mkdir -p "$safe_bin"
   local tool tool_path
-  for tool in bash env git tr sed cat dirname basename mkdir perl grep tail mktemp rm cp awk; do
+  for tool in bash env git tr sed cat cut dirname basename mkdir perl grep tail mktemp rm cp awk; do
     tool_path="$(command -v "$tool")"
     ln -sf "$tool_path" "$safe_bin/$tool"
   done

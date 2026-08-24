@@ -4,6 +4,46 @@ All notable changes to this project are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-08-24
+
+### Added
+
+- Optional `.env` at the skill repo root (gitignored) for
+  `FIREWORKS_API_KEY` and `FW_BASE_URL`, loaded by the new
+  `scripts/load-env.sh` helper; environment variables always win.
+- delegate.sh scans the transcript after each run and prints a warning
+  when the delegate hit any permission denials, so a blocked action is
+  visible next to the diff stat instead of hiding in the log.
+
+### Changed
+
+- Delegation now runs on headless Claude Code sessions instead of
+  OpenCode: `delegate.sh` invokes `claude -p` pointed at Fireworks'
+  Anthropic compatibility endpoint (`api.fireworks.ai/inference`),
+  scoped per invocation through the new `scripts/fw-claude.sh` wrapper.
+  The orchestrator session stays on Anthropic; global Claude Code
+  settings are never modified. Delegate sessions run with
+  `--permission-mode acceptEdits` and the Bash tool pre-approved (no
+  `--dangerously-skip-permissions`), so configured deny rules still
+  apply.
+- Default model ID drops the OpenCode provider prefix:
+  `accounts/fireworks/routers/kimi-k3-us`. A legacy `fireworks-ai/`
+  prefix on `--model` is accepted and stripped.
+- Delegate logs are now the session transcript in stream-json format
+  (one JSON event per line, including every tool call and its output).
+  The PR body log tail truncates long lines to stay under GitHub's
+  size limit.
+- `check-env.sh` now verifies the claude CLI, the `FIREWORKS_API_KEY`
+  environment variable, and the compatibility endpoint via curl before
+  smoke-testing through the same wrapper delegate.sh uses; it also
+  warns about conflicting `ANTHROPIC_*` env entries in Claude Code
+  settings files (as left by `fireconnect claude on`).
+
+### Removed
+
+- The OpenCode dependency, its auth-store detection, and the OpenCode
+  gitignore entries.
+
 ## [0.2.1] - 2026-08-11
 
 ### Fixed
@@ -87,6 +127,7 @@ Initial release.
 - README with FireConnect-first setup instructions and a cost note on
   Fireworks serverless pricing.
 
+[0.3.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.3.0
 [0.2.1]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.2.1
 [0.2.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.2.0
 [0.1.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.1.0
