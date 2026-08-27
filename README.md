@@ -144,6 +144,12 @@ Delegated implementation runs on Fireworks serverless pricing through the
 only Claude's planning and review turns consume your Anthropic plan. Check
 current rates at https://fireworks.ai/pricing before running large batches.
 
+## Related projects
+
+- [phi-delegate](https://github.com/brianleach/phi-delegate): the same
+  orchestrate-and-delegate pattern, but the delegate is an isolated headless
+  Claude Code session on a BAA / zero-data-retention Anthropic key, for PHI work.
+
 ## License
 
 MIT
