@@ -127,7 +127,7 @@ Initial release.
 - README with FireConnect-first setup instructions and a cost note on
   Fireworks serverless pricing.
 
-[0.3.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.3.0
+[0.3.0]: https://github.com/brianleach/fireworks-delegate/compare/v0.2.1...2669654417a480483b4410e8088383675e6ded5b
 [0.2.1]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.2.1
 [0.2.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.2.0
 [0.1.0]: https://github.com/brianleach/fireworks-delegate/releases/tag/v0.1.0
