@@ -43,7 +43,7 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 
 # Command-line settings outrank the user and project settings files, so a
-# stale env block in ~/.claude/settings.json (fireconnect and friends)
+# stale env block in ~/.claude/settings.json (Nexus, formerly FireConnect)
 # cannot redirect this run. Every model slot points at the delegate model
 # so alias lookups and background tasks stay on Fireworks. The API key is
 # passed only through the environment: settings JSON lands on argv, which
