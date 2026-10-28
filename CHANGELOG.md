@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The
 format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Docs and preflight warnings refer to the Nexus CLI, Fireworks' new name
+  for FireConnect. The default model is an `accounts/fireworks/routers/`
+  ID, not a `firerouter/*` ID, so the November 10 retirement of
+  `firerouter/*` does not affect delegate runs.
+
 ## [0.3.0] - 2026-08-24
 
 ### Added

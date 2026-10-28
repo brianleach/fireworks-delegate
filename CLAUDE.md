@@ -35,7 +35,7 @@ of spawning Claude subagents.
   `accounts/fireworks/routers/kimi-k3-us`
 - Delegate runs reach Fireworks only through per-invocation environment
   variables set by `fw-claude.sh`. Never flip the user's global Claude Code
-  configuration (no fireconnect-style rewrites of `~/.claude/settings.json`).
+  configuration (no Nexus/FireConnect-style rewrites of `~/.claude/settings.json`).
 - Secrets come from the environment or the gitignored `.env` at this
   repo's root, loaded by `scripts/load-env.sh`. The environment wins.
 - Delegate sessions use `--permission-mode acceptEdits --allowedTools Bash`,

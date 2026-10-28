@@ -74,7 +74,7 @@ for settings_file in "${HOME}/.claude/settings.json" ".claude/settings.json" ".c
   if [ -f "$settings_file" ] &&
     grep -Eq '"ANTHROPIC_(AUTH_TOKEN|API_KEY|CUSTOM_HEADERS)"' "$settings_file" 2>/dev/null; then
     warn "auth override found in $settings_file" \
-      "an ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY / ANTHROPIC_CUSTOM_HEADERS env entry there outranks this skill's per-run environment; if the smoke test fails, remove it (fireconnect users: fireconnect claude off)"
+      "an ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY / ANTHROPIC_CUSTOM_HEADERS env entry there outranks this skill's per-run environment; if the smoke test fails, remove it (often left behind by the Nexus CLI, formerly FireConnect)"
   fi
 done
 

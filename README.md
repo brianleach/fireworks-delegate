@@ -72,12 +72,12 @@ disallow them), and prompt caching is not applied.
    from the environment; a real environment variable always wins.
    `FW_BASE_URL` can live there too.
 
-   Note for [FireConnect](https://github.com/fw-ai/fireconnect) users:
-   `fireconnect claude on` is not needed and is best left off. It rewrites
-   your global Claude Code settings so every session runs on Fireworks;
+   Note for Nexus CLI users (formerly FireConnect): `nexus claude` is not
+   needed for this skill. Nexus points Claude Code itself at Fireworks;
    this skill instead scopes Fireworks to delegate runs only and just
-   needs the environment variable. If a leftover fireconnect env block is
-   present, `check-env.sh` warns about it.
+   needs the environment variable. If a leftover Nexus or FireConnect env
+   block is present in your Claude Code settings, `check-env.sh` warns
+   about it.
 
 3. Clone this repo anywhere and symlink it into your Claude Code skills:
 
