@@ -99,7 +99,12 @@ Never merge blind. For each finished worktree:
    it whole; it can be large. If delegate.sh printed a permission-denial
    warning for the run, treat it as a review finding: check what was
    blocked and whether the result is still complete.
-2. Run `scripts/collect.sh <name>` to see the full diff.
+2. Run `scripts/collect.sh <name>` to see the full diff. Pass
+   `--base <branch>` to state the base branch explicitly when the
+   recorded one is missing or wrong; it is required when the base branch
+   cannot be inferred (no `.fw-worktrees/<name>.base` record), and
+   collect.sh stops with an error until it is given. The same flag works
+   with `--merge` and `--reject`.
 3. Judge: is it correct, does it match the spec, do tests pass?
 
 When the task was delegated with `--pr`, also post your review to the
